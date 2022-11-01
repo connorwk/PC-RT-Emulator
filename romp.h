@@ -12,16 +12,27 @@
 #define PROG_STATUS_PC	0x00000180
 #define PROG_STATUS_SVC	0x00000190
 
-#define CounterSrc		SCR[6]
-#define Counter				SCR[7]
-#define TS						SCR[8]
-#define ExcepCtrlReg	SCR[9]
-#define MultQuot			SCR[10]
-#define MCSPCS				SCR[11]
-#define IRB						SCR[12]
-#define IAR						SCR[13]
-#define ICS						SCR[14]
-#define CS						SCR[15]
+union SCRs {
+	uint32_t _direct[16];
+	struct {
+		uint32_t Resvered0;
+		uint32_t Resvered1;
+		uint32_t Resvered2;
+		uint32_t Resvered3;
+		uint32_t Resvered4;
+		uint32_t Resvered5;
+		uint32_t CounterSrc;
+		uint32_t Counter;
+		uint32_t TS;
+		uint32_t ExcepCtrlReg;
+		uint32_t MultQuot;
+		uint32_t MCSPCS;
+		uint32_t IRB;
+		uint32_t IAR;
+		uint32_t ICS;
+		uint32_t CS;
+	};
+};
 
 /*
 struct OldPS {

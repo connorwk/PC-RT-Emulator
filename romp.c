@@ -8,39 +8,39 @@
 #include <logfac.h>
 
 uint32_t GPR[16];
-uint32_t SCR[16];
+union SCRs SCR;
 
 void procinit (void) {
 	for (uint8_t i=0; i < 16; i++) {
 		GPR[i] = 0x00000000;
-		SCR[i] = 0x00000000;
+		SCR._direct[i] = 0x00000000;
 	}
 }
 
 void z_lt_eq_gt_flag_set (uint32_t val) {
 	if (val == 0x00000000) {
-		CS &= 0xFFFFFF0F;
-		CS |= 0x00000020;
+		SCR.CS &= 0xFFFFFF0F;
+		SCR.CS |= 0x00000020;
 	} else if (val & 0x80000000) {
-		CS &= 0xFFFFFF0F;
-		CS |= 0x00000040;
+		SCR.CS &= 0xFFFFFF0F;
+		SCR.CS |= 0x00000040;
 	} else if (val & 0x7FFFFFFF) {
-		CS &= 0xFFFFFF0F;
-		CS |= 0x00000010;
+		SCR.CS &= 0xFFFFFF0F;
+		SCR.CS |= 0x00000010;
 	}
 }
 
 void progcheck (void) { 
-	mmuwrite(PROG_STATUS_PC, IAR, WORD, DIRECT);
-	mmuwrite(PROG_STATUS_PC+4, ICS, HALFWORD, DIRECT);
-	mmuwrite(PROG_STATUS_PC+6, CS, HALFWORD, DIRECT);
+	mmuwrite(PROG_STATUS_PC, SCR.IAR, WORD, DIRECT);
+	mmuwrite(PROG_STATUS_PC+4, SCR.ICS, HALFWORD, DIRECT);
+	mmuwrite(PROG_STATUS_PC+6, SCR.CS, HALFWORD, DIRECT);
 
 }
 
 uint32_t fetch (void) {
 	uint32_t inst;
-	inst = mmuread(IAR, WORD, TRANSLATE);
-	IAR = decode(inst);
+	inst = mmuread(SCR.IAR, WORD, TRANSLATE);
+	SCR.IAR = decode(inst);
 }
 
 uint32_t decode (uint32_t inst) {
@@ -57,7 +57,7 @@ uint32_t decode (uint32_t inst) {
 	uint32_t addr;
 
 	if (nibble0 < 8) {
-		nextIAR = IAR+2;
+		nextIAR = SCR.IAR+2;
 		// JI, X, D-Short format Instructions
 		switch(nibble0) {
 			case 0:
@@ -99,7 +99,7 @@ uint32_t decode (uint32_t inst) {
 				break;
 		}
 	} else {
-		nextIAR = IAR+4;
+		nextIAR = SCR.IAR+4;
 		// R, BI, BA, D format Instructions
 		switch(byte0) {
 			case 0x88:
@@ -276,7 +276,7 @@ uint32_t decode (uint32_t inst) {
 			case 0xB5:
 				// MTS
 				if (r2 == 13) {logmsgf(LOGPROC, "WARNING: MTS SCR13 is unpredictable. IAR: 0x%08X", IAR);}
-				SCR[r2] = GPR[r3];
+				SCR._direct[r2] = GPR[r3];
 				break;
 			case 0xB6:
 				// D
@@ -363,7 +363,7 @@ uint32_t decode (uint32_t inst) {
 				// IOR
 				addr = r3_reg_or_0 + i16;
 				if (addr & 0xFF000000) {
-					MCSPCS |= 0x00000082;
+					SCR.MCSPCS |= 0x00000082;
 					progcheck();
 				}
 				GPR[r2] = ;
@@ -558,7 +558,7 @@ uint32_t decode (uint32_t inst) {
 				break;
 			default:
 				// Unexpected Instruction Program-Check
-				logmsgf(LOGPROC, "ERROR: Unexpected Instruction IAR: 0x%08X, Instruction Word: 0x%08X", SCR[13], inst);
+				logmsgf(LOGPROC, "ERROR: Unexpected Instruction IAR: 0x%08X, Instruction Word: 0x%08X", SCR.IAR, inst);
 				break;
 		}
 	}
