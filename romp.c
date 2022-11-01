@@ -1,21 +1,63 @@
-// ROMP CPU emulation
+// ROMP CPU Emulation
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
+
+#include <romp.h>
+#include <mmu.h>
+#include <logfac.h>
 
 uint32_t GPR[16];
 uint32_t SCR[16];
 
-uint32_t fetch () {
-	// Fetch next instruction and increment IAR
+void procinit (void) {
+	for (uint8_t i=0; i < 16; i++) {
+		GPR[i] = 0x00000000;
+		SCR[i] = 0x00000000;
+	}
 }
 
-void decode (uint32_t inst) {
+void z_lt_eq_gt_flag_set (uint32_t val) {
+	if (val == 0x00000000) {
+		CS &= 0xFFFFFF0F;
+		CS |= 0x00000020;
+	} else if (val & 0x80000000) {
+		CS &= 0xFFFFFF0F;
+		CS |= 0x00000040;
+	} else if (val & 0x7FFFFFFF) {
+		CS &= 0xFFFFFF0F;
+		CS |= 0x00000010;
+	}
+}
+
+void progcheck (void) { 
+	mmuwrite(PROG_STATUS_PC, IAR, WORD, DIRECT);
+	mmuwrite(PROG_STATUS_PC+4, ICS, HALFWORD, DIRECT);
+	mmuwrite(PROG_STATUS_PC+6, CS, HALFWORD, DIRECT);
+
+}
+
+uint32_t fetch (void) {
+	uint32_t inst;
+	inst = mmuread(IAR, WORD, TRANSLATE);
+	IAR = decode(inst);
+}
+
+uint32_t decode (uint32_t inst) {
 	uint8_t nibble0 = (inst & 0xF0000000) >> 28;
 	uint8_t r1 = (inst & 0x0F000000) >> 24;
 	uint8_t r2 = (inst & 0x00F00000) >> 20;
 	uint8_t r3 = (inst & 0x000F0000) >> 16;
 	uint8_t byte0 = (inst & 0xFF000000) >> 24;
+	uint32_t r3_reg_or_0;
+	if (r3 == 0) {r3_reg_or_0 = 0;} else {r3_reg_or_0 = GPR[r3];}
+	uint16_t i16 = inst & 0x0000FFFF;
+
+	uint32_t nextIAR;
+	uint32_t addr;
+
 	if (nibble0 < 8) {
+		nextIAR = IAR+2;
 		// JI, X, D-Short format Instructions
 		switch(nibble0) {
 			case 0:
@@ -41,7 +83,7 @@ void decode (uint32_t inst) {
 				break;
 			case 4:
 				// LCS
-
+				//GPR[r2] = 0x00000000 | r3_reg_or_0;
 				break;
 			case 5:
 				// LHAS
@@ -57,6 +99,7 @@ void decode (uint32_t inst) {
 				break;
 		}
 	} else {
+		nextIAR = IAR+4;
 		// R, BI, BA, D format Instructions
 		switch(byte0) {
 			case 0x88:
@@ -158,10 +201,12 @@ void decode (uint32_t inst) {
 			case 0xA0:
 				// SARI
 				GPR[r2] = (uint32_t)((int32_t)GPR[r2] >> r3);
+				z_lt_eq_gt_flag_set(GPR[r2]);
 				break;
 			case 0xA1:
 				// SARI16
 				GPR[r2] = (uint32_t)((int32_t)GPR[r2] >> (r3+16));
+				z_lt_eq_gt_flag_set(GPR[r2]);
 				break;
 			case 0xA4:
 				// LIS
@@ -170,38 +215,47 @@ void decode (uint32_t inst) {
 			case 0xA8:
 				// SRI
 				GPR[r2] = GPR[r2] >> r3;
+				z_lt_eq_gt_flag_set(GPR[r2]);
 				break;
 			case 0xA9:
 				// SRI16
 				GPR[r2] = GPR[r2] >> (r3+16);
+				z_lt_eq_gt_flag_set(GPR[r2]);
 				break;
 			case 0xAA:
 				// SLI
 				GPR[r2] = GPR[r2] << r3;
+				z_lt_eq_gt_flag_set(GPR[r2]);
 				break;
 			case 0xAB:
 				// SLI16
 				GPR[r2] = GPR[r2] << (r3+16);
+				z_lt_eq_gt_flag_set(GPR[r2]);
 				break;
 			case 0xAC:
 				// SRPI
 				GPR[r2^0x01] = GPR[r2] >> r3;
+				z_lt_eq_gt_flag_set(GPR[r2^0x01]);
 				break;
 			case 0xAD:
 				// SRPI16
 				GPR[r2^0x01] = GPR[r2] >> (r3+16);
+				z_lt_eq_gt_flag_set(GPR[r2^0x01]);
 				break;
 			case 0xAE:
 				// SLPI
 				GPR[r2^0x01] = GPR[r2] << r3;
+				z_lt_eq_gt_flag_set(GPR[r2^0x01]);
 				break;
 			case 0xAF:
 				// SLPI16
 				GPR[r2^0x01] = GPR[r2] << (r3+16);
+				z_lt_eq_gt_flag_set(GPR[r2^0x01]);
 				break;
 			case 0xB0:
 				// SAR
 				GPR[r2] = (uint32_t)((int32_t)GPR[r2] >> (GPR[r3] & 0x0000003F));
+				z_lt_eq_gt_flag_set(GPR[r2]);
 				break;
 			case 0xB1:
 				// EXTS
@@ -221,7 +275,8 @@ void decode (uint32_t inst) {
 				break;
 			case 0xB5:
 				// MTS
-				
+				if (r2 == 13) {logmsgf(LOGPROC, "WARNING: MTS SCR13 is unpredictable. IAR: 0x%08X", IAR);}
+				SCR[r2] = GPR[r3];
 				break;
 			case 0xB6:
 				// D
@@ -230,6 +285,7 @@ void decode (uint32_t inst) {
 			case 0xB8:
 				// SR
 				GPR[r2] = GPR[r2] >> (GPR[r3] & 0x0000003F);
+				z_lt_eq_gt_flag_set(GPR[r2]);
 				break;
 			case 0xB9:
 				// SRP
@@ -305,7 +361,12 @@ void decode (uint32_t inst) {
 				break;
 			case 0xCB:
 				// IOR
-				
+				addr = r3_reg_or_0 + i16;
+				if (addr & 0xFF000000) {
+					MCSPCS |= 0x00000082;
+					progcheck();
+				}
+				GPR[r2] = ;
 				break;
 			case 0xCC:
 				// TI
@@ -496,9 +557,10 @@ void decode (uint32_t inst) {
 				
 				break;
 			default:
-				// Unexpected Instruction TRAP
-
+				// Unexpected Instruction Program-Check
+				logmsgf(LOGPROC, "ERROR: Unexpected Instruction IAR: 0x%08X, Instruction Word: 0x%08X", SCR[13], inst);
 				break;
 		}
 	}
+	return nextIAR;
 }
