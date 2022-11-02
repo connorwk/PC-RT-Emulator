@@ -31,15 +31,15 @@ void z_lt_eq_gt_flag_set (uint32_t val) {
 }
 
 void progcheck (void) { 
-	mmuwrite(PROG_STATUS_PC, SCR.IAR, WORD, DIRECT);
-	mmuwrite(PROG_STATUS_PC+4, SCR.ICS, HALFWORD, DIRECT);
-	mmuwrite(PROG_STATUS_PC+6, SCR.CS, HALFWORD, DIRECT);
+	procwrite(PROG_STATUS_PC, SCR.IAR, WORD, MEMORY);
+	procwrite(PROG_STATUS_PC+4, SCR.ICS, HALFWORD, MEMORY);
+	procwrite(PROG_STATUS_PC+6, SCR.CS, HALFWORD, MEMORY);
 
 }
 
 uint32_t fetch (void) {
 	uint32_t inst;
-	inst = mmuread(SCR.IAR, WORD, TRANSLATE);
+	inst = procread(SCR.IAR, WORD, MEMORY);
 	SCR.IAR = decode(inst);
 }
 
@@ -50,8 +50,11 @@ uint32_t decode (uint32_t inst) {
 	uint8_t r3 = (inst & 0x000F0000) >> 16;
 	uint8_t byte0 = (inst & 0xFF000000) >> 24;
 	uint32_t r3_reg_or_0;
-	if (r3 == 0) {r3_reg_or_0 = 0;} else {r3_reg_or_0 = GPR[r3];}
-	uint16_t i16 = inst & 0x0000FFFF;
+	r3_reg_or_0 = r3 ? GPR[r3] : 0;
+	// From simple sign extention to int8_t for addr calculation
+	int8_t JI = inst & 0x00800000 ? -((inst & 0x007F0000) >> 15): (inst & 0x007F0000) >> 15;
+	// From simple sign extention to int16_t for addr calculation
+	int16_t i16 = inst & 0x00008000 ? -(inst & 0x00007FFF) : inst & 0x00007FFF;
 
 	uint32_t nextIAR;
 	uint32_t addr;
@@ -63,39 +66,43 @@ uint32_t decode (uint32_t inst) {
 			case 0:
 				if (inst & 0x0800) {
 					// JB
-					
+					if ( (SCR.CS & (0x80 >> (r1 & 0x7))) ) {
+						nextIAR = SCR.IAR + JI;
+					}
 				} else {
 					// JNB
-
+					if ( !(SCR.CS & (0x80 >> (r1 & 0x7))) ) {
+						nextIAR = SCR.IAR + JI;
+					}
 				}
 				break;
 			case 1:
 				// STCS
-
+					procwrite(r3_reg_or_0 + r1, GPR[r2], BYTE, MEMORY);
 				break;
 			case 2:
 				// STHS
-
+					procwrite(r3_reg_or_0 + (r1 << 1), GPR[r2], HALFWORD, MEMORY);
 				break;
 			case 3:
 				// STS
-
+					procwrite(r3_reg_or_0 + (r1 << 2), GPR[r2], WORD, MEMORY);
 				break;
 			case 4:
 				// LCS
-				//GPR[r2] = 0x00000000 | r3_reg_or_0;
+				GPR[r2] = procread(r3_reg_or_0 + r1, BYTE, MEMORY);
 				break;
 			case 5:
 				// LHAS
-
+				GPR[r2] = (int16_t)procread(r3_reg_or_0 + (r1 << 1), HALFWORD, MEMORY);;
 				break;
 			case 6:
 				// CAS
-
+				GPR[r1] = GPR[r2]+r3_reg_or_0;
 				break;
 			case 7:
 				// LS
-				
+				GPR[r2] = procread(r3_reg_or_0 + (r1 << 2), HALFWORD, MEMORY);
 				break;
 		}
 	} else {
@@ -140,7 +147,7 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0x91:
 				// INC
-				
+				GPR[r2] = GPR[r2] + r3;
 				break;
 			case 0x92:
 				// SIS
@@ -148,7 +155,7 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0x93:
 				// DEC
-				
+				GPR[r2] = GPR[r2] - r3;
 				break;
 			case 0x94:
 				// CIS
@@ -210,7 +217,7 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xA4:
 				// LIS
-				
+				GPR[r2] = r3;
 				break;
 			case 0xA8:
 				// SRI
@@ -275,7 +282,7 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xB5:
 				// MTS
-				if (r2 == 13) {logmsgf(LOGPROC, "WARNING: MTS SCR13 is unpredictable. IAR: 0x%08X", IAR);}
+				if (r2 == 13) {logmsgf(LOGPROC, "WARNING: MTS SCR13 is unpredictable. IAR: 0x%08X", SCR.IAR);}
 				SCR._direct[r2] = GPR[r3];
 				break;
 			case 0xB6:
@@ -325,7 +332,7 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xC2:
 				// CAL16
-				
+				GPR[r2] = (GPR[r2] & 0xFFFF0000) | ((r3_reg_or_0 + i16) & 0x0000FFFF);
 				break;
 			case 0xC3:
 				// OIU
@@ -349,15 +356,17 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xC8:
 				// CAL
-				
+				GPR[r2] = r3_reg_or_0 + i16;
 				break;
 			case 0xC9:
 				// LM
-				
+				for (int i = r2; i < 16; i++) {
+					GPR[i] = procread(r3_reg_or_0 + i16, WORD, MEMORY);
+				}
 				break;
 			case 0xCA:
 				// LHA
-				
+				GPR[r2] = (int16_t)procread(r3_reg_or_0 + (i16 << 1), HALFWORD, MEMORY);;
 				break;
 			case 0xCB:
 				// IOR
@@ -366,7 +375,7 @@ uint32_t decode (uint32_t inst) {
 					SCR.MCSPCS |= 0x00000082;
 					progcheck();
 				}
-				GPR[r2] = ;
+				GPR[r2] = procread(addr, WORD, PIO);
 				break;
 			case 0xCC:
 				// TI
@@ -374,15 +383,16 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xCD:
 				// L
-				
+				GPR[r2] = procread(r3_reg_or_0 + i16, WORD, MEMORY);
 				break;
 			case 0xCE:
 				// LC
-				
+				GPR[r2] = procread(r3_reg_or_0 + i16, BYTE, MEMORY);
 				break;
 			case 0xCF:
 				// TSH
-				
+				GPR[r2] = procread(r3_reg_or_0 + i16, HALFWORD, MEMORY);
+				procwrite(r3_reg_or_0 + i16 - 1, 0xFF, BYTE, MEMORY);
 				break;
 			case 0xD0:
 				// LPS
@@ -418,31 +428,38 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xD8:
 				// CAU
-				
+				GPR[r2] = r3_reg_or_0 + (i16 << 16);
 				break;
 			case 0xD9:
 				// STM
-				
+				for (int i = r2; i < 16; i++) {
+					procwrite(r3_reg_or_0 + i16, GPR[i], WORD, MEMORY);
+				}
 				break;
 			case 0xDA:
 				// LH
-				
+				GPR[r2] = (GPR[r2] & 0xFFFF0000) | procread(r3_reg_or_0 + i16, HALFWORD, MEMORY);
 				break;
 			case 0xDB:
 				// IOW
-				
+				addr = r3_reg_or_0 + i16;
+				if (addr & 0xFF000000) {
+					SCR.MCSPCS |= 0x00000082;
+					progcheck();
+				}
+				procwrite(addr, GPR[r2], WORD, PIO);
 				break;
 			case 0xDC:
 				// STH
-				
+				procwrite(r3_reg_or_0 + i16, GPR[r2], HALFWORD, MEMORY);
 				break;
 			case 0xDD:
 				// ST
-				
+				procwrite(r3_reg_or_0 + i16, GPR[r2], WORD, MEMORY);
 				break;
 			case 0xDE:
 				// STC
-				
+				procwrite(r3_reg_or_0 + i16, GPR[r2], BYTE, MEMORY);
 				break;
 			case 0xE0:
 				// ABS
@@ -486,7 +503,7 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xEB:
 				// LHS
-				
+				GPR[r2] = 0x00000000 | procread(GPR[r3], HALFWORD, MEMORY);
 				break;
 			case 0xEC:
 				// BALR
@@ -518,7 +535,7 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xF3:
 				// CA16
-				
+				GPR[r2] = (GPR[r3] & 0xFFFF0000) | (GPR[r2] & 0x0000FFFF) + (GPR[r3] & 0x0000FFFF);
 				break;
 			case 0xF4:
 				// ONEC
