@@ -49,8 +49,8 @@ uint32_t decode (uint32_t inst) {
 	uint8_t r2 = (inst & 0x00F00000) >> 20;
 	uint8_t r3 = (inst & 0x000F0000) >> 16;
 	uint8_t byte0 = (inst & 0xFF000000) >> 24;
-	uint32_t r3_reg_or_0;
-	r3_reg_or_0 = r3 ? GPR[r3] : 0;
+	uint32_t r3_reg_or_0 = r3 ? GPR[r3] : 0;
+	uint32_t BA = (inst & 0x00FFFFFE);
 	// From simple sign extention to int8_t for addr calculation
 	int8_t JI = inst & 0x00800000 ? -((inst & 0x007F0000) >> 15): (inst & 0x007F0000) >> 15;
 	// From simple sign extention to int16_t for addr calculation
@@ -111,35 +111,51 @@ uint32_t decode (uint32_t inst) {
 		switch(byte0) {
 			case 0x88:
 				// BNB
-				
+				if ( !(SCR.CS & (0x8000 >> (r2 & 0xFF))) ) {
+					nextIAR = SCR.IAR + (i16 << 1);
+				}
 				break;
 			case 0x89:
 				// BNBX
-				
+				if ( !(SCR.CS & (0x8000 >> (r2 & 0xFF))) ) {
+					nextIAR = SCR.IAR + (i16 << 1);
+					// TODO: Subject Instruction Exec
+				}
 				break;
 			case 0x8A:
 				// BALA
-				
+				GPR[15] = nextIAR;
+				nextIAR = BA;
 				break;
 			case 0x8B:
 				// BALAX
-				
+				GPR[15] = nextIAR+4;
+				nextIAR = BA;
+				// TODO: Subject Instruction Exec
 				break;
 			case 0x8C:
 				// BALI
-				
+				GPR[r2] = nextIAR;
+				nextIAR = i16 << 1;
 				break;
 			case 0x8D:
 				// BALIX
-				
+				GPR[r2] = nextIAR+4;
+				nextIAR = i16 << 1;
+				// TODO: Subject Instruction Exec
 				break;
 			case 0x8E:
 				// BB
-				
+				if ( (SCR.CS & (0x8000 >> (r2 & 0xFF))) ) {
+					nextIAR = SCR.IAR + (i16 << 1);
+				}
 				break;
 			case 0x8F:
 				// BBX
-				
+				if ( (SCR.CS & (0x8000 >> (r2 & 0xFF))) ) {
+					nextIAR = SCR.IAR + (i16 << 1);
+					// TODO: Subject Instruction Exec
+				}
 				break;
 			case 0x90:
 				// AIS
@@ -495,11 +511,16 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xE8:
 				// BNBR
-				
+				if ( !(SCR.CS & (0x8000 >> (r2 & 0xFF))) ) {
+					nextIAR = GPR[r3] & 0xFFFFFFFE;
+				}
 				break;
 			case 0xE9:
 				// BNBRX
-				
+				if ( !(SCR.CS & (0x8000 >> (r2 & 0xFF))) ) {
+					nextIAR = GPR[r3] & 0xFFFFFFFE;
+					// TODO: Subject Instruction Exec
+				}
 				break;
 			case 0xEB:
 				// LHS
@@ -507,19 +528,27 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xEC:
 				// BALR
-				
+				GPR[r2] = nextIAR;
+				nextIAR = GPR[r3] & 0xFFFFFFFE;
 				break;
 			case 0xED:
 				// BALRX
-				
+				GPR[r2] = nextIAR+4;
+				nextIAR = GPR[r3] & 0xFFFFFFFE;
+				// TODO: Subject Instruction Exec
 				break;
 			case 0xEE:
 				// BBR
-				
+				if ( (SCR.CS & (0x8000 >> (r2 & 0xFF))) ) {
+					nextIAR = GPR[r3] & 0xFFFFFFFE;
+				}
 				break;
 			case 0xEF:
 				// BBRX
-				
+				if ( (SCR.CS & (0x8000 >> (r2 & 0xFF))) ) {
+					nextIAR = GPR[r3] & 0xFFFFFFFE;
+					// TODO: Subject Instruction Exec
+				}
 				break;
 			case 0xF0:
 				// WAIT
