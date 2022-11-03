@@ -576,31 +576,31 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xF9:
 				// MC03
-				
+				GPR[r2] = (GPR[r2] & 0x00FFFFFF) | (GPR[r3] & 0x000000FF << 24);
 				break;
 			case 0xFA:
 				// MC13
-				
+				GPR[r2] = (GPR[r2] & 0xFF00FFFF) | (GPR[r3] & 0x000000FF << 16);
 				break;
 			case 0xFB:
 				// MC23
-				
+				GPR[r2] = (GPR[r2] & 0xFFFF00FF) | (GPR[r3] & 0x000000FF << 8);
 				break;
 			case 0xFC:
 				// MC33
-				
+				GPR[r2] = (GPR[r2] & 0xFFFFFF00) | GPR[r3] & 0x000000FF;
 				break;
 			case 0xFD:
 				// MC30
-				
+				GPR[r2] = (GPR[r2] & 0xFFFFFF00) | (GPR[r3] & 0xFF000000 >> 24);
 				break;
 			case 0xFE:
 				// MC31
-				
+				GPR[r2] = (GPR[r2] & 0xFFFFFF00) | (GPR[r3] & 0x00FF0000 >> 16);
 				break;
 			case 0xFF:
 				// MC32
-				
+				GPR[r2] = (GPR[r2] & 0xFFFFFF00) | (GPR[r3] & 0x0000FF00 >> 8);
 				break;
 			default:
 				// Unexpected Instruction Program-Check
