@@ -34,6 +34,27 @@ union SCRs {
 	};
 };
 
+#define CS_MASK_Perm_Zero 0x00000080
+#define CS_MASK_Clear_Perm_Zero 0xFFFFFF7F
+
+#define CS_MASK_LT 0x00000040
+#define CS_MASK_Clear_LT 0xFFFFFFBF
+
+#define CS_MASK_EQ 0x00000020
+#define CS_MASK_Clear_EQ 0xFFFFFFDF
+
+#define CS_MASK_GT 0x00000010
+#define CS_MASK_Clear_GT 0xFFFFFFEF
+
+#define CS_MASK_C0 0x00000008
+#define CS_MASK_Clear_C0 0xFFFFFFF7
+
+#define CS_MASK_OV 0x00000002
+#define CS_MASK_Clear_OV 0xFFFFFFFD
+
+#define CS_MASK_TB 0x00000001
+#define CS_MASK_Clear_TB 0xFFFFFFFE
+
 /*
 struct OldPS {
 	uint32_t OldIAR;
