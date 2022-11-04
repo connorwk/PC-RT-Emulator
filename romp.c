@@ -207,19 +207,27 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0x98:
 				// CLRBU
-				
+				GPR[r2] = GPR[r2] & ~(0x80000000 >> r3);
+				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		CLRBU GPR%d, %d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0x99:
 				// CLRBL
-				
+				GPR[r2] = GPR[r2] & ~(0x00008000 >> r3);
+				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		CLRBL GPR%d, %d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0x9A:
 				// SETBU
-				
+				GPR[r2] = GPR[r2] | (0x80000000 >> r3);
+				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SETBU GPR%d, %d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0x9B:
 				// SETBL
-				
+				GPR[r2] = GPR[r2] | (0x00008000 >> r3);
+				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SETBL GPR%d, %d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0x9C:
 				// MFTBIU
@@ -245,11 +253,13 @@ uint32_t decode (uint32_t inst) {
 				// SARI
 				GPR[r2] = (uint32_t)((int32_t)GPR[r2] >> r3);
 				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SARI GPR%d, %d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xA1:
 				// SARI16
 				GPR[r2] = (uint32_t)((int32_t)GPR[r2] >> (r3+16));
 				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SARI16 GPR%d, %d+16\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xA4:
 				// LIS
@@ -260,46 +270,55 @@ uint32_t decode (uint32_t inst) {
 				// SRI
 				GPR[r2] = GPR[r2] >> r3;
 				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SRI GPR%d, %d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xA9:
 				// SRI16
 				GPR[r2] = GPR[r2] >> (r3+16);
 				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SRI16 GPR%d, %d+16\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xAA:
 				// SLI
 				GPR[r2] = GPR[r2] << r3;
 				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SLI GPR%d, %d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xAB:
 				// SLI16
 				GPR[r2] = GPR[r2] << (r3+16);
 				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SLI16 GPR%d, %d+16\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xAC:
 				// SRPI
 				GPR[r2^0x01] = GPR[r2] >> r3;
 				z_lt_eq_gt_flag_set(GPR[r2^0x01]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SRPI GPR%d, %d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xAD:
 				// SRPI16
 				GPR[r2^0x01] = GPR[r2] >> (r3+16);
 				z_lt_eq_gt_flag_set(GPR[r2^0x01]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SRPI16 GPR%d, %d+16\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xAE:
 				// SLPI
 				GPR[r2^0x01] = GPR[r2] << r3;
 				z_lt_eq_gt_flag_set(GPR[r2^0x01]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SLPI GPR%d, %d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xAF:
 				// SLPI16
 				GPR[r2^0x01] = GPR[r2] << (r3+16);
 				z_lt_eq_gt_flag_set(GPR[r2^0x01]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SLPI16 GPR%d, %d+16\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xB0:
 				// SAR
 				GPR[r2] = (uint32_t)((int32_t)GPR[r2] >> (GPR[r3] & 0x0000003F));
 				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SAR GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xB1:
 				// EXTS
@@ -330,18 +349,25 @@ uint32_t decode (uint32_t inst) {
 				// SR
 				GPR[r2] = GPR[r2] >> (GPR[r3] & 0x0000003F);
 				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SR GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xB9:
 				// SRP
-				
+				GPR[r2^0x01] = GPR[r2] >> GPR[r3];
+				z_lt_eq_gt_flag_set(GPR[r2^0x01]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SRP GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xBA:
 				// SL
-				
+				GPR[r2] = GPR[r2] << GPR[r3];
+				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SL GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xBB:
 				// SLP
-				
+				GPR[r2^0x01] = GPR[r2] << GPR[r3];
+				z_lt_eq_gt_flag_set(GPR[r2^0x01]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SLP GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xBC:
 				// MFTB
@@ -376,23 +402,33 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xC3:
 				// OIU
-				
+				GPR[r2] = GPR[r3] | (I16 << 16);
+				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	OIU GPR%d, GPR%d | 0x%04X\n", SCR.IAR, inst, r2, r3, I16);
 				break;
 			case 0xC4:
 				// OIL
-				
+				GPR[r2] = GPR[r3] | I16;
+				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	OIL GPR%d, GPR%d | 0x%04X\n", SCR.IAR, inst, r2, r3, I16);
 				break;
 			case 0xC5:
 				// NILZ
-				
+				GPR[r2] = GPR[r3] & I16;
+				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	NILZ GPR%d, GPR%d & 0x%04X\n", SCR.IAR, inst, r2, r3, I16);
 				break;
 			case 0xC6:
 				// NILO
-				
+				GPR[r2] = GPR[r3] & ( 0xFFFF0000 | I16);
+				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	NILO GPR%d, GPR%d & 0x%04X\n", SCR.IAR, inst, r2, r3, I16);
 				break;
 			case 0xC7:
 				// XIL
-				
+				GPR[r2] = GPR[r3] ^ I16;
+				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	XIL GPR%d, GPR%d ^ 0x%04X\n", SCR.IAR, inst, r2, r3, I16);
 				break;
 			case 0xC8:
 				// CAL
@@ -462,20 +498,26 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xD5:
 				// NIUZ
-				
+				GPR[r2] = GPR[r3] & (I16 << 16);
+				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	NIUZ GPR%d, GPR%d & 0x%04X\n", SCR.IAR, inst, r2, r3, I16);
 				break;
 			case 0xD6:
 				// NIUO
-				
+				GPR[r2] = GPR[r3] & ((I16 << 16) | 0x0000FFFF);
+				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	NIUO GPR%d, GPR%d & 0x%04X\n", SCR.IAR, inst, r2, r3, I16);
 				break;
 			case 0xD7:
 				// XIU
-				
+				GPR[r2] = GPR[r3] ^ (I16 << 16);
+				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	XIU GPR%d, GPR%d & 0x%04X\n", SCR.IAR, inst, r2, r3, I16);
 				break;
 			case 0xD8:
 				// CAU
 				GPR[r2] = r3_reg_or_0 + (I16 << 16);
-				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	CAU GPR%d, %s+%04X\n", SCR.IAR, inst, r2, gpr_or_0(r3), I16);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	CAU GPR%d, %s+0x%04X\n", SCR.IAR, inst, r2, gpr_or_0(r3), I16);
 				break;
 			case 0xD9:
 				// STM
@@ -487,7 +529,7 @@ uint32_t decode (uint32_t inst) {
 			case 0xDA:
 				// LH
 				GPR[r2] = (GPR[r2] & 0xFFFF0000) | procread(r3_reg_or_0 + sI16, HALFWORD, MEMORY);
-				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	LHS GPR%d, %s+%d\n", SCR.IAR, inst, r2, gpr_or_0(r3), sI16);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	LH GPR%d, %s+%d\n", SCR.IAR, inst, r2, gpr_or_0(r3), sI16);
 				break;
 			case 0xDB:
 				// IOW
@@ -527,7 +569,9 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xE3:
 				// O
-				
+				GPR[r2] = GPR[r2] | GPR[r3];
+				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		O GPR%d, GPR%d | GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r2, r3);
 				break;
 			case 0xE4:
 				// TWOC
@@ -535,7 +579,9 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xE5:
 				// N
-				
+				GPR[r2] = GPR[r2] & GPR[r3];
+				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		N GPR%d, GPR%d & GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r2, r3);
 				break;
 			case 0xE6:
 				// M
@@ -543,7 +589,9 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xE7:
 				// X
-				
+				GPR[r2] = GPR[r2] ^ GPR[r3];
+				z_lt_eq_gt_flag_set(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		X GPR%d, GPR%d ^ GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r2, r3);
 				break;
 			case 0xE8:
 				// BNBR
@@ -614,7 +662,13 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xF5:
 				// CLZ
-				
+				for (int i = 0; i < 16; i++) {
+					if ( ~GPR[r3] & (0x00008000 >> i) ) {
+						GPR[r2] = i;
+						break;
+					}
+				}
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		CLZ GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xF9:
 				// MC03
