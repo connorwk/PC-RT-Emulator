@@ -224,18 +224,22 @@ uint32_t decode (uint32_t inst) {
 			case 0x9C:
 				// MFTBIU
 				GPR[r2] = (GPR[r2] & ~(0x80000000 >> r3)) | ((SCR.CS & CS_MASK_TB) << 31 - r3);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MFTBIU GPR%d, %d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0x9D:
 				// MFTBIL
 				GPR[r2] = (GPR[r2] & ~(0x00008000 >> r3)) | ((SCR.CS & CS_MASK_TB) << 15 - r3);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MFTBIL GPR%d, %d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0x9E:
 				// MTTBIU
 				SCR.CS = (SCR.CS & CS_MASK_Clear_TB) | ((GPR[r2] & (0x80000000 >> r3) >> (31 - r3)));
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MTTBIU GPR%d, %d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0x9F:
 				// MTTBIL
 				SCR.CS = (SCR.CS & CS_MASK_Clear_TB) | ((GPR[r2] & (0x00008000 >> r3) >> (15 - r3)));
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MTTBIL GPR%d, %d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xA0:
 				// SARI
@@ -250,6 +254,7 @@ uint32_t decode (uint32_t inst) {
 			case 0xA4:
 				// LIS
 				GPR[r2] = r3;
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		LIS GPR%d, %02X\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xA8:
 				// SRI
@@ -341,6 +346,7 @@ uint32_t decode (uint32_t inst) {
 			case 0xBC:
 				// MFTB
 				GPR[r2] = (GPR[r2] & ~(0x80000000 >> (GPR[r3] & 0x0000001F))) | ((SCR.CS & 0x00000001) << 31 - (GPR[r3] & 0x0000001F));
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MFTB GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xBD:
 				// TGTE
@@ -353,6 +359,7 @@ uint32_t decode (uint32_t inst) {
 			case 0xBF:
 				// MTTB
 				SCR.CS = (SCR.CS & CS_MASK_Clear_TB) | ((GPR[r2] & (0x80000000 >> (GPR[r3] & 0x0000001F))) >> 31 - (GPR[r3] & 0x0000001F));
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MTTB GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xC0:
 				// SVC
@@ -612,30 +619,37 @@ uint32_t decode (uint32_t inst) {
 			case 0xF9:
 				// MC03
 				GPR[r2] = (GPR[r2] & 0x00FFFFFF) | (GPR[r3] & 0x000000FF << 24);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MC03 GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xFA:
 				// MC13
 				GPR[r2] = (GPR[r2] & 0xFF00FFFF) | (GPR[r3] & 0x000000FF << 16);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MC13 GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xFB:
 				// MC23
 				GPR[r2] = (GPR[r2] & 0xFFFF00FF) | (GPR[r3] & 0x000000FF << 8);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MC23 GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xFC:
 				// MC33
 				GPR[r2] = (GPR[r2] & 0xFFFFFF00) | GPR[r3] & 0x000000FF;
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MC33 GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xFD:
 				// MC30
 				GPR[r2] = (GPR[r2] & 0xFFFFFF00) | (GPR[r3] & 0xFF000000 >> 24);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MC30 GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xFE:
 				// MC31
 				GPR[r2] = (GPR[r2] & 0xFFFFFF00) | (GPR[r3] & 0x00FF0000 >> 16);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MC31 GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xFF:
 				// MC32
 				GPR[r2] = (GPR[r2] & 0xFFFFFF00) | (GPR[r3] & 0x0000FF00 >> 8);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MC32 GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			default:
 				// Unexpected Instruction Program-Check
