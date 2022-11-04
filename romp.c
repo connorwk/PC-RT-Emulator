@@ -138,23 +138,27 @@ uint32_t decode (uint32_t inst) {
 				// BALA
 				GPR[15] = nextIAR;
 				nextIAR = BA;
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	BALA 0x%06X\n", SCR.IAR, inst, BA);
 				break;
 			case 0x8B:
 				// BALAX
 				GPR[15] = nextIAR+4;
 				nextIAR = BA;
 				// TODO: Subject Instruction Exec
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	BALAX 0x%06X\n	SUB", SCR.IAR, inst, BA);
 				break;
 			case 0x8C:
 				// BALI
 				GPR[r2] = nextIAR;
 				nextIAR = sI16 << 1;
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	BALI GPR%d, %d\n", SCR.IAR, inst, r2, sI16 << 1);
 				break;
 			case 0x8D:
 				// BALIX
 				GPR[r2] = nextIAR+4;
 				nextIAR = sI16 << 1;
 				// TODO: Subject Instruction Exec
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	BALIX GPR%d, %d\n SUB", SCR.IAR, inst, r2, sI16 << 1);
 				break;
 			case 0x8E:
 				// BB
