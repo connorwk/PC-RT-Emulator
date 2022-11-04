@@ -13,3 +13,4 @@ int logmsgf (unsigned int type, const char *format, ...);
 // Helper functions for logging to get human readable text.
 
 const char* getCSname (unsigned int CSnum);
+const char* gpr_or_0 (unsigned int r3);

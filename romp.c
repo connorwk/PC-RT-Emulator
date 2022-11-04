@@ -20,13 +20,13 @@ void procinit (void) {
 void z_lt_eq_gt_flag_set (uint32_t val) {
 	if (val == 0x00000000) {
 		SCR.CS &= 0xFFFFFF0F;
-		SCR.CS |= 0x00000020;
+		SCR.CS |= CS_MASK_EQ;
 	} else if (val & 0x80000000) {
 		SCR.CS &= 0xFFFFFF0F;
-		SCR.CS |= 0x00000040;
+		SCR.CS |= CS_MASK_LT;
 	} else if (val & 0x7FFFFFFF) {
 		SCR.CS &= 0xFFFFFF0F;
-		SCR.CS |= 0x00000010;
+		SCR.CS |= CS_MASK_GT;
 	}
 }
 
