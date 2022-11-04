@@ -64,6 +64,8 @@ struct OldPS {
 */
 
 void procinit (void);
-void z_lt_eq_gt_flag_set (uint32_t val);
+void z_lt_eq_gt_flag_check (uint32_t val);
+void c0_flag_check (uint64_t val);
+void ov_flag_check (uint64_t val);
 uint32_t fetch (void);
 uint32_t decode (uint32_t inst);
