@@ -18,28 +18,49 @@ void procinit (void) {
 }
 
 void z_lt_eq_gt_flag_check (uint32_t val) {
+	SCR.CS &= 0xFFFFFF0F;
 	if (val == 0x00000000) {
-		SCR.CS &= 0xFFFFFF0F;
 		SCR.CS |= CS_MASK_EQ;
 	} else if (val & 0x80000000) {
-		SCR.CS &= 0xFFFFFF0F;
 		SCR.CS |= CS_MASK_LT;
 	} else if (val & 0x7FFFFFFF) {
-		SCR.CS &= 0xFFFFFF0F;
 		SCR.CS |= CS_MASK_GT;
 	}
 }
 
+void algebretic_cmp (uint32_t val1, uint32_t val2) {
+	SCR.CS &= 0xFFFFFF0F;
+	if ( (int32_t)val1 == (int32_t)val2 ) {
+		SCR.CS |= CS_MASK_EQ;
+	} else if ( (int32_t)val1 < (int32_t)val2 ) {
+		SCR.CS |= CS_MASK_LT;
+	} else if ( (int32_t)val1 > (int32_t)val2 ) {
+		SCR.CS |= CS_MASK_GT;
+	}
+}
+
+void logical_cmp (uint32_t val1, uint32_t val2) {
+	SCR.CS &= 0xFFFFFF0F;
+	if ( val1 == val2 ) {
+		SCR.CS |= CS_MASK_EQ;
+	} else if ( val1 < val2 ) {
+		SCR.CS |= CS_MASK_LT;
+	} else if ( val1 > val2 ) {
+		SCR.CS |= CS_MASK_GT;
+	}
+}
+
+
 void c0_flag_check (uint64_t val) {
 	if (val == 0x0000000100000000) {
-		SCR.CS &= 0xFFFFFFF5;
+		SCR.CS &= CS_MASK_Clear_C0;
 		SCR.CS |= CS_MASK_C0;
 	}
 }
 
 void ov_flag_check (uint64_t val) {
 	if (val < -2147483648 || val > 2147483647) {
-		SCR.CS &= 0xFFFFFFF5;
+		SCR.CS &= CS_MASK_Clear_OV;
 		SCR.CS |= CS_MASK_OV;
 	}
 }
@@ -192,7 +213,12 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0x90:
 				// AIS
-				
+				arith_result = (int32_t)GPR[r2] + r3;
+				GPR[r2] = arith_result & 0x00000000FFFFFFFF;
+				c0_flag_check(arith_result);
+				ov_flag_check(arith_result);
+				z_lt_eq_gt_flag_check(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		AIS GPR%d, %d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0x91:
 				// INC
@@ -201,7 +227,12 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0x92:
 				// SIS
-				
+				arith_result = (int32_t)GPR[r2] + r3;
+				GPR[r2] = arith_result & 0x00000000FFFFFFFF;
+				c0_flag_check(arith_result);
+				ov_flag_check(arith_result);
+				z_lt_eq_gt_flag_check(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SIS GPR%d, %d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0x93:
 				// DEC
@@ -210,7 +241,8 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0x94:
 				// CIS
-				
+				algebretic_cmp(GPR[r2], r3);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		CIS GPR%d, %d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0x95:
 				// CLRSB
@@ -341,19 +373,28 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xB1:
 				// EXTS
-				
+				GPR[r2] = GPR[r3] & 0x00008000 ? -(GPR[r3] & 0x00007FFF) : GPR[r3] & 0x00007FFF;
+				z_lt_eq_gt_flag_check(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		EXTS GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xB2:
 				// SF
-				
+				arith_result = (int32_t)GPR[r3] - (int32_t)GPR[r2];
+				GPR[r2] = arith_result & 0x00000000FFFFFFFF;
+				c0_flag_check(arith_result);
+				ov_flag_check(arith_result);
+				z_lt_eq_gt_flag_check(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SF GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xB3:
 				// CL
-				
+				logical_cmp(GPR[r2], GPR[r3]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		CL GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xB4:
 				// C
-				
+				algebretic_cmp(GPR[r2], GPR[r3]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		C GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xB5:
 				// MTS
@@ -412,7 +453,12 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xC1:
 				// AI
-				
+				arith_result = (int32_t)GPR[r3] + (int32_t)sI16;
+				GPR[r2] = arith_result & 0x00000000FFFFFFFF;
+				c0_flag_check(arith_result);
+				ov_flag_check(arith_result);
+				z_lt_eq_gt_flag_check(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	AI GPR%d, GPR%d+%d\n", SCR.IAR, inst, r2, r3,sI16);
 				break;
 			case 0xC2:
 				// CAL16
@@ -501,19 +547,33 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xD1:
 				// AEI
-				
+				arith_result = (int32_t)GPR[r3] + (int32_t)sI16 + ((SCR.CS & CS_MASK_C0) >> 3);
+				GPR[r2] = arith_result & 0x00000000FFFFFFFF;
+				c0_flag_check(arith_result);
+				ov_flag_check(arith_result);
+				z_lt_eq_gt_flag_check(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	AEI GPR%d, GPR%d+%d\n", SCR.IAR, inst, r2, r3, sI16);
 				break;
 			case 0xD2:
 				// SFI
-				
+				arith_result = (int32_t)GPR[r3] - (int32_t)sI16;
+				GPR[r2] = arith_result & 0x00000000FFFFFFFF;
+				c0_flag_check(arith_result);
+				ov_flag_check(arith_result);
+				z_lt_eq_gt_flag_check(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	AEI GPR%d, GPR%d+%d\n", SCR.IAR, inst, r2, r3, sI16);
 				break;
 			case 0xD3:
 				// CLI
-				
+				if (r2 != 0x0) {logmsgf(LOGPROC, "WARNING: CI Nibble2 should be zero. IAR: 0x%08X\n", SCR.IAR);}
+				logical_cmp(GPR[r3], sI16);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	CI GPR%d, %d\n", SCR.IAR, inst, r3, sI16);
 				break;
 			case 0xD4:
 				// CI
-				
+				if (r2 != 0x0) {logmsgf(LOGPROC, "WARNING: CI Nibble2 should be zero. IAR: 0x%08X\n", SCR.IAR);}
+				algebretic_cmp(GPR[r3], sI16);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	CI GPR%d, %d\n", SCR.IAR, inst, r3, sI16);
 				break;
 			case 0xD5:
 				// NIUZ
@@ -576,7 +636,18 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xE0:
 				// ABS
-				
+				SCR.CS &= CS_MASK_Clear_OV;
+				SCR.CS &= CS_MASK_Clear_C0;
+				if ( GPR[r3] == 0x80000000 ) {
+					GPR[r2] = ~GPR[r3] + 1;
+					SCR.CS |= CS_MASK_OV;
+				} else if ( GPR[r3] & 0x80000000 ) {
+					GPR[r2] = ~GPR[r3] + 1;
+				} else {
+					GPR[r2] = GPR[r3];
+				}
+				z_lt_eq_gt_flag_check(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		ABS GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xE1:
 				// A
@@ -589,7 +660,12 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xE2:
 				// S
-				
+				arith_result = (int32_t)GPR[r2] - (int32_t)GPR[r3];
+				GPR[r2] = arith_result & 0x00000000FFFFFFFF;
+				c0_flag_check(arith_result);
+				ov_flag_check(arith_result);
+				z_lt_eq_gt_flag_check(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		S GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xE3:
 				// O
@@ -599,7 +675,9 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xE4:
 				// TWOC
-				
+				GPR[r2] = ~GPR[r3] + 1;
+				z_lt_eq_gt_flag_check(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		TWOC GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xE5:
 				// N
@@ -669,11 +747,21 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xF1:
 				// AE
-				
+				arith_result = (int32_t)GPR[r2] + (int32_t)GPR[r3] + ((SCR.CS & CS_MASK_C0) >> 3);
+				GPR[r2] = arith_result & 0x00000000FFFFFFFF;
+				c0_flag_check(arith_result);
+				ov_flag_check(arith_result);
+				z_lt_eq_gt_flag_check(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		AE GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xF2:
 				// SE
-				
+				arith_result = (int32_t)GPR[r2] + (int32_t)(~GPR[r3]) + ((SCR.CS & CS_MASK_C0) >> 3);
+				GPR[r2] = arith_result & 0x00000000FFFFFFFF;
+				c0_flag_check(arith_result);
+				ov_flag_check(arith_result);
+				z_lt_eq_gt_flag_check(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SE GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xF3:
 				// CA16
@@ -682,7 +770,9 @@ uint32_t decode (uint32_t inst) {
 				break;
 			case 0xF4:
 				// ONEC
-				
+				GPR[r2] = ~GPR[r3];
+				z_lt_eq_gt_flag_check(GPR[r2]);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		ONEC GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xF5:
 				// CLZ
