@@ -70,4 +70,4 @@ void logical_cmp (uint32_t val1, uint32_t val2);
 void c0_flag_check (uint64_t val);
 void ov_flag_check (uint64_t val);
 uint32_t fetch (void);
-uint32_t decode (uint32_t inst);
+void decode (uint32_t inst);
