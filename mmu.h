@@ -17,6 +17,8 @@ void procwrite (uint32_t addr, uint32_t data, uint8_t bytes, uint8_t mode);
 uint32_t procread (uint32_t addr, uint8_t bytes, uint8_t mode);
 
 #define MMUCONFIGSIZE 65536
+#define ROMSIZE 65536
+#define MAXREALADDR 16777214
 
 // Memory Address Real/Virtual Map pg. 1-35
 #define IOChanIOMapStartAddr	0xF0000000

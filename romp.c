@@ -983,7 +983,7 @@ void decode (uint32_t inst) {
 				break;
 			default:
 				// Unexpected Instruction Program-Check
-				logmsgf(LOGPROC, "ERROR: Unexpected Instruction IAR: 0x%08X, Instruction Word: 0x%08X\n", SCR.IAR, inst);
+				logmsgf(LOGPROC, "PROC: Error unexpected Instruction IAR: 0x%08X, Instruction Word: 0x%08X\n", SCR.IAR, inst);
 				break;
 		}
 	}
