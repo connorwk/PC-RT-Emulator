@@ -1,4 +1,6 @@
 // MMU Emulation
+#ifndef _MMU
+#define _MMU
 
 #define BYTE 1
 #define HALFWORD 2
@@ -75,3 +77,4 @@ union MMUIOspace {
 		uint32_t Reserved3[53248];
 	};
 };
+#endif

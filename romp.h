@@ -1,4 +1,6 @@
 // ROMP CPU Emulation
+#ifndef _ROMP
+#define _ROMP
 #include <stdint.h>
 
 #define PROG_STATUS_0		0x00000100
@@ -71,3 +73,4 @@ void c0_flag_check (uint64_t val);
 void ov_flag_check (uint64_t val);
 uint32_t fetch (void);
 void decode (uint32_t inst);
+#endif

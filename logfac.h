@@ -1,5 +1,6 @@
 // Logging Facility
-
+#ifndef _LOGFAC
+#define _LOGFAC
 // Logging types
 #define LOGALL 		0xFFFFFFFF
 #define LOGINSTR	0x00000001
@@ -15,3 +16,4 @@ int logmsgf (unsigned int type, const char *format, ...);
 
 const char* getCSname (unsigned int CSnum);
 const char* gpr_or_0 (unsigned int r3);
+#endif
