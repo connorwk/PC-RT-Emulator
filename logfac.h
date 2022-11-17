@@ -7,8 +7,10 @@
 #define LOGPROC 	0x00000002
 #define LOGMEM		0x00000004
 #define LOGMMU		0x00000008
+#define LOGIO			0x00000010
 
 void loginit (const char *file);
+void logend (void);
 void enlogtypes (unsigned int type);
 int logmsgf (unsigned int type, const char *format, ...);
 

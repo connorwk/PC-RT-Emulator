@@ -1,18 +1,30 @@
 // MMU Emulation
 #ifndef _MMU
 #define _MMU
+#include <stdint.h>
 
 #define BYTE 1
 #define HALFWORD 2
 #define WORD 4
+#define INST 5 // Special for Instruction fetch to NOT ignore LSBs of addr.
 
 #define MEMORY 0
 #define PIO 1
 
-void rominit(const char *file);
+void rominit (const char *file);
 void mmuinit (uint8_t* memptr);
+void procwrite (uint32_t addr, uint32_t data, uint8_t bytes, uint8_t mode);
+uint32_t procread (uint32_t addr, uint8_t bytes, uint8_t mode);
 
 #define MMUCONFIGSIZE 65536
+
+// Memory Address Real/Virtual Map pg. 1-35
+#define IOChanIOMapStartAddr	0xF0000000
+#define IOChanIOMapEndAddr		0xF0FFFFFF
+#define IOChanMemMapStartAddr	0xF4000000
+#define IOChanMemMapEndAddr		0xF4FFFFFF
+#define IOChanFPAStartAddr		0xFF000000
+#define IOChanFPAEndAddr			0xFFFFFFFF
 
 // Segment Reg Format pg. 11-127
 #define SEGREGPresent	0x00010000
@@ -26,14 +38,14 @@ void mmuinit (uint8_t* memptr);
 #define ROMSPECParity	0x00001000
 #define ROMSPECAddr		0x00000FF0
 #define ROMSPECSize		0x0000000F
-#define ROMSPECStartAddr	((iommuregs->ROMSpec & ROMSPECAddr) << 12) & 0xFFFFF700 << (iommuregs->ROMSpec & ROMSPECSize)
-#define ROMSPECEndAddr		ROMSPECStartAddr + specsizelookup[iommuregs->ROMSpec & ROMSPECSize]
+#define ROMSPECStartAddr	((iommuregs->ROMSpec & ROMSPECAddr) << 12) & (0xFFFFF700 << (iommuregs->ROMSpec & ROMSPECSize))
+#define ROMSPECEndAddr		(ROMSPECStartAddr + specsizelookup[iommuregs->ROMSpec & ROMSPECSize])
 
 // Ram Spec Reg Format pg. 11-113
 #define RAMSPECAddr		0x00000FF0
 #define RAMSPECSize		0x0000000F
-#define RAMSPECStartAddr	((iommuregs->RAMSpec & RAMSPECAddr) << 12) & 0xFFFFF700 << (iommuregs->RAMSpec & RAMSPECSize)
-#define RAMSPECEndAddr		RAMSPECStartAddr + specsizelookup[iommuregs->RAMSpec & RAMSPECSize]
+#define RAMSPECStartAddr	((iommuregs->RAMSpec & RAMSPECAddr) << 12) & (0xFFFFF700 << (iommuregs->RAMSpec & RAMSPECSize))
+#define RAMSPECEndAddr		(RAMSPECStartAddr + specsizelookup[iommuregs->RAMSpec & RAMSPECSize])
 
 // Translation Ctrl Reg Format pg. 11-117
 #define TRANSCTRLSegReg0VirtEqReal			0x00008000
@@ -49,7 +61,7 @@ void mmuinit (uint8_t* memptr);
  * I/O Address Assignments pg. 11-136
  */
 union MMUIOspace {
-	uint32_t _direct[MMUCONFIGSIZE];
+	uint8_t _direct[MMUCONFIGSIZE];
 	struct {
 		uint32_t SegmentRegs[16];
 		uint32_t IOBaseAddr;

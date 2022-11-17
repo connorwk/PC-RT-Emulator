@@ -2,9 +2,10 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <string.h>
 
-#include <logfac.h>
+#include "logfac.h"
 
 FILE *logfile = NULL;
 unsigned int logtype = 0;
@@ -32,6 +33,7 @@ int logmsgf (unsigned int type, const char *format, ...) {
 	if (logfile != NULL && logtype & type) {
 		va_start(args, format);
 		ret = vfprintf(logfile, format, args);
+		fflush(logfile);
 		va_end(args);
 	}
 }
