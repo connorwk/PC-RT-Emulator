@@ -5,6 +5,7 @@
 #define LOGINSTR	0x00000001
 #define LOGPROC 	0x00000002
 #define LOGMEM		0x00000004
+#define LOGMMU		0x00000008
 
 void loginit (const char *file);
 void enlogtypes (unsigned int type);

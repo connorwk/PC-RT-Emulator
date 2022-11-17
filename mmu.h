@@ -7,11 +7,41 @@
 #define MEMORY 0
 #define PIO 1
 
+void rominit(const char *file);
 void mmuinit (uint8_t* memptr);
-void mmuwrite (uint8_t* ptr, uint32_t addr, uint32_t data, uint8_t bytes);
-uint32_t mmuread (uint8_t* ptr, uint32_t addr, uint8_t bytes);
 
 #define MMUCONFIGSIZE 65536
+
+// Segment Reg Format pg. 11-127
+#define SEGREGPresent	0x00010000
+#define SEGREGProcAcc	0x00008000
+#define SEGREGIOAcc		0x00004000
+#define SEGREGSegID		0x00003FFC
+#define SEGREGSpecial	0x00000002
+#define SEGREGKeyBit	0x00000001
+
+// Rom Spec Reg Format pg. 11-115
+#define ROMSPECParity	0x00001000
+#define ROMSPECAddr		0x00000FF0
+#define ROMSPECSize		0x0000000F
+#define ROMSPECStartAddr	((iommuregs->ROMSpec & ROMSPECAddr) << 12) & 0xFFFFF700 << (iommuregs->ROMSpec & ROMSPECSize)
+#define ROMSPECEndAddr		ROMSPECStartAddr + specsizelookup[iommuregs->ROMSpec & ROMSPECSize]
+
+// Ram Spec Reg Format pg. 11-113
+#define RAMSPECAddr		0x00000FF0
+#define RAMSPECSize		0x0000000F
+#define RAMSPECStartAddr	((iommuregs->RAMSpec & RAMSPECAddr) << 12) & 0xFFFFF700 << (iommuregs->RAMSpec & RAMSPECSize)
+#define RAMSPECEndAddr		RAMSPECStartAddr + specsizelookup[iommuregs->RAMSpec & RAMSPECSize]
+
+// Translation Ctrl Reg Format pg. 11-117
+#define TRANSCTRLSegReg0VirtEqReal			0x00008000
+#define TRANSCTRLIntOnSuccessPErrRetry	0x00004000
+#define TRANSCTRLEnblRasDiag						0x00002000
+#define TRANSCTRLTermLongIPTSearch			0x00001000
+#define TRANSCTRLIntOnCorrECCErr				0x00000800
+#define TRANSCTRLIntOnSuccTLBReload			0x00000400
+#define TRANSCTRLPageSize								0x00000100
+#define TRANSCTRLHATIPTBaseAddr					0x000000FF
 
 /*
  * I/O Address Assignments pg. 11-136

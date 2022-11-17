@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <mmu.h>
 #include <logfac.h>
 
 uint32_t memmax;
@@ -13,6 +14,36 @@ uint8_t* meminit (unsigned int memsizemb) {
 	memmax = memsizemb*1048576;
 	memptr = (uint8_t*)malloc(memmax);
 	return memptr;
+}
+
+void memwrite (uint8_t* ptr, uint32_t addr, uint32_t data, uint8_t bytes) {
+	switch (bytes) {
+		case BYTE:
+			ptr[addr] = data;
+			break;
+		case HALFWORD:
+			memputhw(ptr, addr & 0xFFFFFFFE, data);
+			break;
+		case WORD:
+			memputw(ptr, addr & 0xFFFFFFFC, data);
+			break;
+	}
+}
+
+uint32_t memread (uint8_t* ptr, uint32_t addr, uint8_t bytes) {
+	uint32_t data;
+	switch (bytes) {
+		case BYTE:
+			data = ptr[addr];
+			break;
+		case HALFWORD:
+			data = memgethw(ptr, addr & 0xFFFFFFFE);
+			break;
+		case WORD:
+			data = memgetw(ptr, addr & 0xFFFFFFFC);
+			break;
+	}
+	return data;
 }
 
 uint16_t memgethw (uint8_t *memptr, uint32_t addr) {

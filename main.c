@@ -11,6 +11,7 @@
 void main (void) {
 	loginit("log.txt");
 	mmuinit(meminit(8));
+	rominit("79X34xx.BIN");
 
 	logend();
 }
