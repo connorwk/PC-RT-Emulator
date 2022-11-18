@@ -116,7 +116,7 @@ void decode (uint32_t inst) {
 	uint32_t BA = (inst & 0x00FFFFFE);
 	uint16_t I16 = inst & 0x0000FFFF;
 	// From simple sign extention to int8_t for addr calculation
-	int8_t JI = inst & 0x00800000 ? ((inst >> 16) | 0xFFFFFF00): (inst & 0x007F0000) >> 16;
+	int8_t JI = inst & 0x00800000 ? ((inst >> 16) | 0xFFFFFF00): (inst & 0x007F0000) >> 15;
 	// From simple sign extention to int16_t for addr calculation
 	int16_t sI16 = inst & 0x00008000 ? inst | 0xFFFF0000 : inst & 0x00007FFF;
 
