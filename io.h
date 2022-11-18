@@ -4,6 +4,7 @@
 
 #define SYSBRDCNFGSIZE 262143
 
+void ioinit (void);
 void iowrite (uint32_t addr, uint32_t data, uint8_t bytes);
 uint32_t ioread (uint32_t addr, uint8_t bytes);
 

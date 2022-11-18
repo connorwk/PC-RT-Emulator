@@ -38,6 +38,7 @@ void procinit (void) {
 		GPR[i] = 0x00000000;
 		SCR._direct[i] = 0x00000000;
 	}
+	// Initial IAR from 000000? pg. 11-140
 	SCR.IAR = procread(SCR.IAR, WORD, MEMORY);
 }
 
@@ -115,7 +116,7 @@ void decode (uint32_t inst) {
 	uint32_t BA = (inst & 0x00FFFFFE);
 	uint16_t I16 = inst & 0x0000FFFF;
 	// From simple sign extention to int8_t for addr calculation
-	int8_t JI = inst & 0x00800000 ? ((inst >> 16) | 0xFFFFFF00): (inst & 0x007F0000) >> 15;
+	int8_t JI = inst & 0x00800000 ? ((inst >> 16) | 0xFFFFFF00): (inst & 0x007F0000) >> 16;
 	// From simple sign extention to int16_t for addr calculation
 	int16_t sI16 = inst & 0x00008000 ? inst | 0xFFFF0000 : inst & 0x00007FFF;
 
@@ -181,7 +182,7 @@ void decode (uint32_t inst) {
 				break;
 			case 7:
 				// LS
-				GPR[r2] = procread(r3_reg_or_0 + (r1 << 2), HALFWORD, MEMORY);
+				GPR[r2] = procread(r3_reg_or_0 + (r1 << 2), WORD, MEMORY);
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		LS GPR%d, %s+%d\n", prevIAR, (inst & 0xFFFF0000) >> 16, r2, gpr_or_0(r3), (r1 << 2));
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X + %d\n", GPR[r2], r3_reg_or_0, r1 << 2);
 				break;
@@ -714,17 +715,17 @@ void decode (uint32_t inst) {
 				// LM
 				SCR.IAR = SCR.IAR+4;
 				for (int i = r2; i < 16; i++) {
-					GPR[i] = procread(r3_reg_or_0 + sI16, WORD, MEMORY);
+					GPR[i] = procread(r3_reg_or_0 + sI16 + i - r2, WORD, MEMORY);
 				}
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X		LM GPR%d, %s+%d\n", prevIAR, inst, r2, gpr_or_0(r3), sI16);
 				for (int i = r2; i < 16; i++) {
-					logmsgf(LOGINSTR, "			0x%08X, 0x%08X + 0x%08X\n", GPR[i], r3_reg_or_0, I16);
+					logmsgf(LOGINSTR, "			0x%08X, 0x%08X + 0x%08X + %d\n", GPR[i], r3_reg_or_0, I16, i - r2);
 				}
 				break;
 			case 0xCA:
 				// LHA
 				SCR.IAR = SCR.IAR+4;
-				GPR[r2] = (int16_t)procread(r3_reg_or_0 + (sI16 << 1), HALFWORD, MEMORY);;
+				GPR[r2] = (int16_t)procread(r3_reg_or_0 + (sI16 << 1), HALFWORD, MEMORY);
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X		LHA GPR%d, %s+%d\n", prevIAR, inst, r2, gpr_or_0(r3), sI16 << 1);
 				logmsgf(LOGINSTR, "			0x%08X, 0x%08X\n", GPR[r2], r3_reg_or_0 + (sI16 << 1));
 				break;
@@ -862,17 +863,17 @@ void decode (uint32_t inst) {
 				// STM
 				SCR.IAR = SCR.IAR+4;
 				for (int i = r2; i < 16; i++) {
-					procwrite(r3_reg_or_0 + sI16, GPR[i], WORD, MEMORY);
+					procwrite(r3_reg_or_0 + sI16 + i - r2, GPR[i], WORD, MEMORY);
 				}
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	STM %s+%d,GPR%d\n", prevIAR, inst, gpr_or_0(r3), sI16, r2);
 				for (int i = r2; i < 16; i++) {
-					logmsgf(LOGINSTR, "			0x%08X + 0x%08X, 0x%08X\n", r3_reg_or_0, I16, GPR[i]);
+					logmsgf(LOGINSTR, "			0x%08X + 0x%08X + %d, 0x%08X\n", r3_reg_or_0, I16, i - r2, GPR[i]);
 				}
 				break;
 			case 0xDA:
 				// LH
 				SCR.IAR = SCR.IAR+4;
-				GPR[r2] = (GPR[r2] & 0xFFFF0000) | procread(r3_reg_or_0 + sI16, HALFWORD, MEMORY);
+				GPR[r2] = procread(r3_reg_or_0 + sI16, HALFWORD, MEMORY);
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	LH GPR%d, %s+%d\n", prevIAR, inst, r2, gpr_or_0(r3), sI16);
 				logmsgf(LOGINSTR, "			0x%08X, 0x%08X + 0x%08X\n", GPR[r2], r3_reg_or_0, sI16);
 				break;
@@ -885,7 +886,7 @@ void decode (uint32_t inst) {
 					progcheck();
 				}
 				procwrite(addr, GPR[r2], WORD, PIO);
-				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	IOW GPR%d, %s+0x%04X\n", prevIAR, inst, r2, gpr_or_0(r3), I16);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	IOW %s+0x%04X, GPR%d\n", prevIAR, inst, gpr_or_0(r3), I16, r2);
 				logmsgf(LOGINSTR, "			0x%08X + 0x%08X, 0x%08X\n", r3_reg_or_0, I16, GPR[r2]);
 				break;
 			case 0xDC:
@@ -929,6 +930,7 @@ void decode (uint32_t inst) {
 			case 0xE1:
 				// A
 				SCR.IAR = SCR.IAR+2;
+				prevVal = GPR[r2];
 				arith_result = (int32_t)GPR[r2] + (int32_t)GPR[r3];
 				GPR[r2] = arith_result & 0x00000000FFFFFFFF;
 				c0_flag_check(arith_result);
@@ -1113,7 +1115,7 @@ void decode (uint32_t inst) {
 				// MC03
 				SCR.IAR = SCR.IAR+2;
 				prevVal = GPR[r2];
-				GPR[r2] = (GPR[r2] & 0x00FFFFFF) | (GPR[r3] & 0x000000FF << 24);
+				GPR[r2] = (GPR[r2] & 0x00FFFFFF) | ((GPR[r3] & 0x000000FF) << 24);
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MC03 GPR%d, GPR%d\n", prevIAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X 0x%08X\n", GPR[r2], prevVal, GPR[r3]);
 				break;
@@ -1121,7 +1123,7 @@ void decode (uint32_t inst) {
 				// MC13
 				SCR.IAR = SCR.IAR+2;
 				prevVal = GPR[r2];
-				GPR[r2] = (GPR[r2] & 0xFF00FFFF) | (GPR[r3] & 0x000000FF << 16);
+				GPR[r2] = (GPR[r2] & 0xFF00FFFF) | ((GPR[r3] & 0x000000FF) << 16);
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MC13 GPR%d, GPR%d\n", prevIAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X 0x%08X\n", GPR[r2], prevVal, GPR[r3]);
 				break;
@@ -1129,7 +1131,7 @@ void decode (uint32_t inst) {
 				// MC23
 				SCR.IAR = SCR.IAR+2;
 				prevVal = GPR[r2];
-				GPR[r2] = (GPR[r2] & 0xFFFF00FF) | (GPR[r3] & 0x000000FF << 8);
+				GPR[r2] = (GPR[r2] & 0xFFFF00FF) | ((GPR[r3] & 0x000000FF) << 8);
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MC23 GPR%d, GPR%d\n", prevIAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X 0x%08X\n", GPR[r2], prevVal, GPR[r3]);
 				break;
@@ -1145,7 +1147,7 @@ void decode (uint32_t inst) {
 				// MC30
 				SCR.IAR = SCR.IAR+2;
 				prevVal = GPR[r2];
-				GPR[r2] = (GPR[r2] & 0xFFFFFF00) | (GPR[r3] & 0xFF000000 >> 24);
+				GPR[r2] = (GPR[r2] & 0xFFFFFF00) | ((GPR[r3] & 0xFF000000) >> 24);
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MC30 GPR%d, GPR%d\n", prevIAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X 0x%08X\n", GPR[r2], prevVal, GPR[r3]);
 				break;
@@ -1153,7 +1155,7 @@ void decode (uint32_t inst) {
 				// MC31
 				SCR.IAR = SCR.IAR+2;
 				prevVal = GPR[r2];
-				GPR[r2] = (GPR[r2] & 0xFFFFFF00) | (GPR[r3] & 0x00FF0000 >> 16);
+				GPR[r2] = (GPR[r2] & 0xFFFFFF00) | ((GPR[r3] & 0x00FF0000) >> 16);
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MC31 GPR%d, GPR%d\n", prevIAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X 0x%08X\n", GPR[r2], prevVal, GPR[r3]);
 				break;
@@ -1161,7 +1163,7 @@ void decode (uint32_t inst) {
 				// MC32
 				SCR.IAR = SCR.IAR+2;
 				prevVal = GPR[r2];
-				GPR[r2] = (GPR[r2] & 0xFFFFFF00) | (GPR[r3] & 0x0000FF00 >> 8);
+				GPR[r2] = (GPR[r2] & 0xFFFFFF00) | ((GPR[r3] & 0x0000FF00) >> 8);
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MC32 GPR%d, GPR%d\n", prevIAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X 0x%08X\n", GPR[r2], prevVal, GPR[r3]);
 				break;

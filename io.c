@@ -12,6 +12,7 @@ struct SysBrdConfig sysbrdcnfg;
 
 void ioinit (void) {
 	//Any Init required
+	sysbrdcnfg.CSR = 0x404000FF;
 }
 
 void iowrite (uint32_t addr, uint32_t data, uint8_t bytes) {

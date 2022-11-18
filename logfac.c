@@ -81,19 +81,19 @@ const char* gpr_or_0 (unsigned int r3) {
 		case 0x8:
 			return "GPR8";
 		case 0x9:
-			return "GPR10";
+			return "GPR9";
 		case 0xA:
-			return "GPR11";
+			return "GPR10";
 		case 0xB:
-			return "GPR12";
+			return "GPR11";
 		case 0xC:
-			return "GPR13";
+			return "GPR12";
 		case 0xD:
-			return "GPR14";
+			return "GPR13";
 		case 0xE:
-			return "GPR15";
+			return "GPR14";
 		case 0xF:
-			return "GPR16";
+			return "GPR15";
 		default:
 			return "ERR";
 	}

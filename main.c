@@ -8,6 +8,7 @@
 #include "logfac.h"
 #include "romp.h"
 #include "mmu.h"
+#include "io.h"
 #include "memory.h"
 
 int main (void) {
@@ -15,6 +16,7 @@ int main (void) {
 	enlogtypes(LOGALL);
 	mmuinit(meminit(8));
 	rominit("79X34xx.BIN");
+	ioinit();
 	procinit();
 
 	while(1) {

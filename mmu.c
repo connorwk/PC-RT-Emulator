@@ -37,10 +37,10 @@ void procwrite (uint32_t addr, uint32_t data, uint8_t bytes, uint8_t mode) {
 	if (mode == MEMORY) {
 		if (((iommuregs->RAMSpec & RAMSPECSize) == 0 || (iommuregs->ROMSpec & ROMSPECSize) == 0) && addr <= MAXREALADDR) {
 			memwrite(memory, addr, data, bytes);
-		} else if ((addr >= (ROMSPECStartAddr)) && (addr <= ROMSPECEndAddr)) {
+		} else if ((addr >= (ROMSPECStartAddr)) && (addr <= ROMSPECEndAddr) && ((iommuregs->ROMSpec & ROMSPECSize) != 0)) {
 			// TODO: Set some exception reg?
 			logmsgf(LOGMMU, "MMU: Error attempt to write to rom.\n");
-		} else if ((addr >= (RAMSPECStartAddr)) && (addr <= RAMSPECEndAddr)) {
+		} else if ((addr >= (RAMSPECStartAddr)) && (addr <= RAMSPECEndAddr) && ((iommuregs->RAMSpec & RAMSPECSize) != 0)) {
 			memwrite(memory, addr - RAMSPECStartAddr, data, bytes);
 		} else if ((addr >= IOChanIOMapStartAddr) && (addr <= IOChanIOMapEndAddr)) {
 			iowrite(addr, data, bytes);
@@ -67,9 +67,9 @@ uint32_t procread (uint32_t addr, uint8_t bytes, uint8_t mode) {
 	if (mode == MEMORY) {
 		if (((iommuregs->RAMSpec & RAMSPECSize) == 0 || (iommuregs->ROMSpec & ROMSPECSize) == 0) && addr <= MAXREALADDR) {
 			data = memread(rom, addr & 0x0000FFFF, bytes);
-		} else if ((addr >= (ROMSPECStartAddr)) && (addr <= ROMSPECEndAddr)) {
+		} else if ((addr >= (ROMSPECStartAddr)) && (addr <= ROMSPECEndAddr) && ((iommuregs->ROMSpec & ROMSPECSize) != 0)) {
 			data = memread(rom, addr - ROMSPECStartAddr, bytes);
-		} else if ((addr >= (RAMSPECStartAddr)) && (addr <= RAMSPECEndAddr)) {
+		} else if ((addr >= (RAMSPECStartAddr)) && (addr <= RAMSPECEndAddr) && ((iommuregs->RAMSpec & RAMSPECSize) != 0)) {
 			data = memread(memory, addr - RAMSPECStartAddr, bytes);
 		} else if ((addr >= IOChanIOMapStartAddr) && (addr <= IOChanIOMapEndAddr)) {
 			data = ioread(addr, bytes);
