@@ -19,7 +19,7 @@ int main (void) {
 
 	while(1) {
 		//if (getchar() == 'q') {break;}
-		printregs();
+		//printregs();
 		//for (int i=0; i < 64; i++) {
 		fetch();
 	}

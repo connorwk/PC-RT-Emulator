@@ -36,6 +36,7 @@ int logmsgf (unsigned int type, const char *format, ...) {
 		fflush(logfile);
 		va_end(args);
 	}
+	return ret;
 }
 
 const char* getCSname (unsigned int CSnum) {
@@ -93,5 +94,7 @@ const char* gpr_or_0 (unsigned int r3) {
 			return "GPR15";
 		case 0xF:
 			return "GPR16";
+		default:
+			return "ERR";
 	}
 }

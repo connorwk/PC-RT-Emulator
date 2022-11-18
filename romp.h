@@ -67,7 +67,7 @@ struct OldPS {
 
 void procinit (void);
 void printregs(void);
-void z_lt_eq_gt_flag_check (uint32_t val);
+void lt_eq_gt_flag_check (uint32_t val);
 void algebretic_cmp (uint32_t val1, uint32_t val2);
 void logical_cmp (uint32_t val1, uint32_t val2);
 void c0_flag_check (uint64_t val);

@@ -60,7 +60,7 @@ void iowrite (uint32_t addr, uint32_t data, uint8_t bytes) {
 	} else if (addr >= 0xF0010800 && addr <= 0xF0010FFF) {
 		sysbrdcnfg.CSR = data;
 	} else {
-		logmsgf(LOGMMU, "IO: Error IO write to non-existant IO addr: 0x%08X\n", addr);
+		logmsgf(LOGMMU, "IO: Error IO write to non-existant IO addr 0x%08X: 0x%08X\n", addr, data);
 	}
 }
 
@@ -113,7 +113,7 @@ uint32_t ioread (uint32_t addr, uint8_t bytes) {
 	} else if (addr >= 0xF0010800 && addr <= 0xF0010FFF) {
 		data = sysbrdcnfg.CSR;
 	} else {
-		logmsgf(LOGMMU, "IO: Error IO read to non-existant IO addr: 0x%08X\n", addr);
+		logmsgf(LOGMMU, "IO: Error IO read to non-existant IO addr 0x%08X\n", addr);
 	}
 	return data;
 }
