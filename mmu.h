@@ -63,7 +63,7 @@ uint32_t procread (uint32_t addr, uint8_t bytes, uint8_t mode);
  * I/O Address Assignments pg. 11-136
  */
 union MMUIOspace {
-	uint8_t _direct[MMUCONFIGSIZE];
+	uint32_t _direct[MMUCONFIGSIZE];
 	struct {
 		uint32_t SegmentRegs[16];
 		uint32_t IOBaseAddr;

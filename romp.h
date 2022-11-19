@@ -3,6 +3,9 @@
 #define _ROMP
 #include <stdint.h>
 
+#define NORMEXEC 0
+#define DIRECTEXEC 1
+
 #define PROG_STATUS_0		0x00000100
 #define PROG_STATUS_1		0x00000110
 #define PROG_STATUS_2		0x00000120
@@ -67,11 +70,12 @@ struct OldPS {
 
 void procinit (void);
 void printregs(void);
+void progcheck (void);
 void lt_eq_gt_flag_check (uint32_t val);
 void algebretic_cmp (uint32_t val1, uint32_t val2);
 void logical_cmp (uint32_t val1, uint32_t val2);
 void c0_flag_check (uint64_t val);
 void ov_flag_check (uint64_t val);
 uint32_t fetch (void);
-void decode (uint32_t inst);
+void decode (uint32_t inst, uint8_t mode);
 #endif

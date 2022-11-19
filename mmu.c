@@ -28,7 +28,7 @@ void rominit (const char *file) {
 
 void mmuinit (uint8_t* memptr) {
 	memory = memptr;
-	iommuregs = malloc(MMUCONFIGSIZE);
+	iommuregs = malloc(MMUCONFIGSIZE*4);
 	memset(iommuregs->_direct, 0, MMUCONFIGSIZE);
 }
 
@@ -55,7 +55,12 @@ void procwrite (uint32_t addr, uint32_t data, uint8_t bytes, uint8_t mode) {
 			iommuregs->IOBaseAddr = data;
 		} else if (addr >= (iommuregs->IOBaseAddr << 16) && addr < ((iommuregs->IOBaseAddr << 16) + MMUCONFIGSIZE)){
 			logmsgf(LOGMMU, "MMU: Write to IOMMU Regs Decoded 0x%08X: 0x%08X\n", addr & 0x0000FFFF, data);
-			iommuregs->_direct[addr & 0x0000FFFF] = data;
+			if ( ((addr & 0x0000FFFF) >= 0x1000) && ((addr & 0x0000FFFF) <= 0x2FFF) ) {
+				// Only last two bits of Ref/Change regs are valid
+				iommuregs->_direct[addr & 0x0000FFFF] = (data & 0x00000003);
+			} else {
+				iommuregs->_direct[addr & 0x0000FFFF] = data;
+			}
 		} else {
 			logmsgf(LOGMMU, "MMU: Error PIO write outside valid ranges 0x%08X: 0x%08X\n", addr, data);
 		}
