@@ -40,14 +40,14 @@ uint32_t procread (uint32_t addr, uint8_t bytes, uint8_t mode);
 #define ROMSPECParity	0x00001000
 #define ROMSPECAddr		0x00000FF0
 #define ROMSPECSize		0x0000000F
-#define ROMSPECStartAddr	((iommuregs->ROMSpec & ROMSPECAddr) << 12) & (0xFFFFF700 << (iommuregs->ROMSpec & ROMSPECSize))
-#define ROMSPECEndAddr		(ROMSPECStartAddr + specsizelookup[iommuregs->ROMSpec & ROMSPECSize])
+#define ROMSPECStartAddr	((iommuregs->ROMSpec & ROMSPECAddr) << 12) & (0xFFFFFE00 << (iommuregs->ROMSpec & ROMSPECSize))
+#define ROMSPECEndAddr		((ROMSPECStartAddr) + specsizelookup[iommuregs->ROMSpec & ROMSPECSize])
 
 // Ram Spec Reg Format pg. 11-113
 #define RAMSPECAddr		0x00000FF0
 #define RAMSPECSize		0x0000000F
-#define RAMSPECStartAddr	((iommuregs->RAMSpec & RAMSPECAddr) << 12) & (0xFFFFF700 << (iommuregs->RAMSpec & RAMSPECSize))
-#define RAMSPECEndAddr		(RAMSPECStartAddr + specsizelookup[iommuregs->RAMSpec & RAMSPECSize])
+#define RAMSPECStartAddr	((iommuregs->RAMSpec & RAMSPECAddr) << 12) & (0xFFFFFE00 << (iommuregs->RAMSpec & RAMSPECSize))
+#define RAMSPECEndAddr		((RAMSPECStartAddr) + specsizelookup[iommuregs->RAMSpec & RAMSPECSize])
 
 // Translation Ctrl Reg Format pg. 11-117
 #define TRANSCTRLSegReg0VirtEqReal			0x00008000

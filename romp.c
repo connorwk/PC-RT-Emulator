@@ -103,7 +103,9 @@ uint32_t fetch (void) {
 	uint32_t inst;
 	// TODO: Interrupt, error, POR to clear wait state.
 	if (wait) {return 1;}
+	printf("IAR: 0x%08X", SCR.IAR);
 	inst = procread(SCR.IAR, INST, MEMORY);
+	printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
 	decode(inst, NORMEXEC);
 	return 0;
 }
@@ -711,7 +713,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	CAL16 GPR%d, %s+%04X\n", SCR.IAR, inst, r2, gpr_or_0(r3), I16);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
 				prevVal = GPR[r2];
-				GPR[r2] = (GPR[r2] & 0xFFFF0000) | (((r3_reg_or_0 & 0x0000FFFF) + I16) & 0x0000FFFF);
+				GPR[r2] = (r3_reg_or_0 & 0xFFFF0000) | (((r3_reg_or_0 & 0x0000FFFF) + I16) & 0x0000FFFF);
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X | 0x%08X + 0x%08X\n", GPR[r2], prevVal, (r3_reg_or_0 & 0x0000FFFF), I16);
 				break;
 			case 0xC3:
@@ -764,7 +766,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	CAL GPR%d, %s+%d\n", SCR.IAR, inst, r2, gpr_or_0(r3), sI16);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
 				GPR[r2] = r3_reg_or_0 + sI16;
-				logmsgf(LOGINSTR, "			0x%08X = 0x%08X + 0x%08X\n", GPR[r2], r3_reg_or_0, I16);
+				logmsgf(LOGINSTR, "			0x%08X = 0x%08X + 0x%08X\n", GPR[r2], r3_reg_or_0, sI16);
 				break;
 			case 0xC9:
 				// LM
