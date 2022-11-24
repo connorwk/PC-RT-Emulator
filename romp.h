@@ -80,7 +80,7 @@ union SCRs {
 #define ICS_MASK_ParityErrRetry		0x00001000
 #define ICS_MASK_MemProtect				0x00000800
 #define ICS_MASK_UnprivState			0x00000400
-#define ICS_MASK_TranslateState		0x00000200
+#define ICS_MASK_TranslateMode		0x00000200
 #define ICS_MASK_IntMask					0x00000100
 #define ICS_MASK_CheckStopMask		0x00000080
 #define ICS_MASK_ProcPriority			0x00000007

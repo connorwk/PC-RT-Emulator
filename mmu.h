@@ -11,11 +11,15 @@
 #define MEMORY 0
 #define PIO 1
 
+#define TAG_PROC 0
+#define TAG_IO 1
+#define TAG_OVERRIDE 2
+
 void rominit (const char *file);
-void mmuinit (uint8_t* memptr);
+void mmuinit (uint8_t* memptr, uint32_t* SCRICSptr);
 int invalidAddrCheck (uint32_t addr, uint32_t end_addr, uint8_t bytes);
-void procwrite (uint32_t addr, uint32_t data, uint8_t bytes, uint8_t mode);
-uint32_t procread (uint32_t addr, uint8_t bytes, uint8_t mode);
+void procwrite (uint32_t addr, uint32_t data, uint8_t bytes, uint8_t mode, uint8_t tag);
+uint32_t procread (uint32_t addr, uint8_t bytes, uint8_t mode, uint8_t tag);
 
 #define MMUCONFIGSIZE 65536
 #define ROMSIZE 65536
@@ -82,6 +86,17 @@ uint32_t procread (uint32_t addr, uint8_t bytes, uint8_t mode);
 #define TRANSCTRLPageSize								0x00000100
 #define TRANSCTRLHATIPTBaseAddr					0x000000FF
 
+// TLB Real Page Num Format pg. 11-130
+#define TLBRealPgNum2K	0x0000FFF8
+#define TLBRealPgNum4K	0x0000FFF0
+#define TLBValidBit			0x00000004
+#define TLBKeyBits			0x00000003
+
+// TLB Write Bit, Trans ID, Lockbits Format pg. 11-131
+#define TLBWriteBit				0x01000000
+#define TLBTransactionID	0x00FF0000
+#define TLBLockBits				0x0000FFFF
+
 /*
  * I/O Address Assignments pg. 11-136
  */
@@ -99,12 +114,12 @@ union MMUIOspace {
 		uint32_t ROMSpec;
 		uint32_t RASModeDiag;
 		uint32_t Reserved1[7];
-		uint32_t TLB0_AddrTagField_TLB0[16];
-		uint32_t TLB1_AddrTagField_TLB0[16];
-		uint32_t TLB0_RealPageNum_VBs_KBs_TLB0[16];
-		uint32_t TLB1_RealPageNum_VBs_KBs_TLB0[16];
-		uint32_t TLB0_WB_TransID_LBs_TLB0[16];
-		uint32_t TLB1_WB_TransID_LBs_TLB0[16];
+		uint32_t TLB0_AddrTagField[16];
+		uint32_t TLB1_AddrTagField[16];
+		uint32_t TLB0_RealPageNum_VBs_KBs[16];
+		uint32_t TLB1_RealPageNum_VBs_KBs[16];
+		uint32_t TLB0_WB_TransID_LBs[16];
+		uint32_t TLB1_WB_TransID_LBs[16];
 		uint32_t InvalidateEntireTLB;
 		uint32_t InvalidateTLBEntriesInSeg;
 		uint32_t InvalidateTLBEntriesInEffectiveAddr;

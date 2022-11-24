@@ -25,11 +25,12 @@ int main (void) {
 	loginit("log.txt");
 	enlogtypes(LOGALL);
 	memptr = meminit();
-	mmuinit(memptr);
 	rominit("bins/79X34xx.BIN");
 	ioinit();
 	GPR = procinit();
 	SCR = getSCRptr();
+	mmuinit(memptr, &SCR->ICS);
+
 	romp_pointers(GPR, SCR);
 	int close = 0;
 
