@@ -12,27 +12,7 @@ union SCRs SCR;
 
 uint32_t wait;
 
-void printregs(void) {
-	printf("GPR0:		0x%08X		GPR1:		0x%08X\n", GPR[0], GPR[1]);
-	printf("GPR2:		0x%08X		GPR3:		0x%08X\n", GPR[2], GPR[3]);
-	printf("GPR4:		0x%08X		GPR5:		0x%08X\n", GPR[4], GPR[5]);
-	printf("GPR6:		0x%08X		GPR7:		0x%08X\n", GPR[6], GPR[7]);
-	printf("GPR8:		0x%08X		GPR9:		0x%08X\n", GPR[8], GPR[9]);
-	printf("GPR10:		0x%08X		GPR11:		0x%08X\n", GPR[10], GPR[11]);
-	printf("GPR12:		0x%08X		GPR13:		0x%08X\n", GPR[12], GPR[13]);
-	printf("GPR14:		0x%08X		GPR15:		0x%08X\n", GPR[14], GPR[15]);
-
-	printf("SCR0:		0x%08X		SCR1:		0x%08X\n", SCR._direct[0], SCR._direct[1]);
-	printf("SCR2:		0x%08X		SCR3:		0x%08X\n", SCR._direct[2], SCR._direct[3]);
-	printf("SCR4:		0x%08X		SCR5:		0x%08X\n", SCR._direct[4], SCR._direct[5]);
-	printf("SCR6:		0x%08X		SCR7:		0x%08X\n", SCR._direct[6], SCR._direct[7]);
-	printf("SCR8:		0x%08X		SCR9:		0x%08X\n", SCR._direct[8], SCR._direct[9]);
-	printf("SCR10:		0x%08X		SCR11:		0x%08X\n", SCR._direct[10], SCR._direct[11]);
-	printf("SCR12:		0x%08X		SCR13:		0x%08X\n", SCR._direct[12], SCR._direct[13]);
-	printf("SCR14:		0x%08X		SCR15:		0x%08X\n", SCR._direct[14], SCR._direct[15]);
-}
-
-void procinit (void) {
+uint32_t* procinit (void) {
 	wait = 0;
 	for (uint8_t i=0; i < 16; i++) {
 		GPR[i] = 0x00000000;
@@ -40,6 +20,11 @@ void procinit (void) {
 	}
 	// Initial IAR from 000000? pg. 11-140
 	SCR.IAR = procread(SCR.IAR, WORD, MEMORY);
+	return &GPR[0];
+}
+
+union SCRs* getSCRptr (void) {
+	return &SCR;
 }
 
 void lt_eq_gt_flag_check (uint32_t val) {
@@ -103,9 +88,7 @@ uint32_t fetch (void) {
 	uint32_t inst;
 	// TODO: Interrupt, error, POR to clear wait state.
 	if (wait) {return 1;}
-	printf("IAR: 0x%08X", SCR.IAR);
 	inst = procread(SCR.IAR, INST, MEMORY);
-	printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
 	decode(inst, NORMEXEC);
 	return 0;
 }
@@ -836,6 +819,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				SCR.IAR = procread(r3_reg_or_0 + sI16, WORD, MEMORY);
 				SCR.ICS = procread(r3_reg_or_0 + sI16 + 4, HALFWORD, MEMORY);
 				SCR.CS = procread(r3_reg_or_0 + sI16 + 6, HALFWORD, MEMORY);
+				SCR.MCSPCS = 0;
 				logmsgf(LOGINSTR, "			Regs: IAR: 0x%08X ICS: 0x%08X CS: 0x%08X\n", SCR.IAR, SCR.ICS, SCR.CS);
 				// TODO: if machine check level, MCS content set to 0
 				// TODO: if bit 10, pending mem operations restarted before instr execution resumed, ECR (SCR 9) contains count and mem addr.

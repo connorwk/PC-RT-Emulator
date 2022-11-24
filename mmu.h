@@ -13,12 +13,16 @@
 
 void rominit (const char *file);
 void mmuinit (uint8_t* memptr);
+int invalidAddrCheck (uint32_t addr, uint32_t end_addr, uint8_t bytes);
 void procwrite (uint32_t addr, uint32_t data, uint8_t bytes, uint8_t mode);
 uint32_t procread (uint32_t addr, uint8_t bytes, uint8_t mode);
 
 #define MMUCONFIGSIZE 65536
 #define ROMSIZE 65536
 #define MAXREALADDR 16777214
+
+// Lock bits to track locked registers
+#define MEARLOCKBIT 0x00000001
 
 // Memory Address Real/Virtual Map pg. 1-35
 #define IOChanIOMapStartAddr	0xF0000000
@@ -27,6 +31,25 @@ uint32_t procread (uint32_t addr, uint8_t bytes, uint8_t mode);
 #define IOChanMemMapEndAddr		0xF4FFFFFF
 #define IOChanFPAStartAddr		0xFF000000
 #define IOChanFPAEndAddr			0xFFFFFFFF
+
+// Memory Exception Register Map pg. 11-120
+#define MERSegProtV		0x00020000
+#define MERProcACKD		0x00010000
+#define MERProcNAKD		0x00008000
+#define MERInvMemAddr	0x00004000
+#define MERInvIOAddr	0x00002000
+#define MERAccType		0x00001000
+#define MERUnCorrECC	0x00000800
+#define MERCorrECC		0x00000400
+#define MERTLBReload	0x00000200
+#define MERWriteROM		0x00000080
+#define MERIPTSpecErr	0x00000040
+#define MERExtDevExcp	0x00000020
+#define MERMultExcp		0x00000010
+#define MERPageFault	0x00000008
+#define MERTLBSpec		0x00000004
+#define MERProtect		0x00000002
+#define MERData				0x00000001
 
 // Segment Reg Format pg. 11-127
 #define SEGREGPresent	0x00010000

@@ -3,7 +3,11 @@
 #define _MEMORY
 #include <stdint.h>
 
-uint8_t* meminit (unsigned int memsizemb);
+// Memory size max is 16MB
+#define MEMORYSIZEMB 8
+#define MEMORYSIZE MEMORYSIZEMB*1048576
+
+uint8_t* meminit (void);
 void memwrite (uint8_t* ptr, uint32_t addr, uint32_t data, uint8_t bytes);
 uint32_t memread (uint8_t* ptr, uint32_t addr, uint8_t bytes);
 uint16_t memgethw (uint8_t *memptr, uint32_t addr);

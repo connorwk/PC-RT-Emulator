@@ -5,7 +5,6 @@
 #include <string.h>
 
 #include "io.h"
-#include "memory.h"
 #include "logfac.h"
 
 struct SysBrdConfig sysbrdcnfg;

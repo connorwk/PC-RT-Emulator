@@ -39,6 +39,7 @@ union SCRs {
 	};
 };
 
+// CS Masks
 #define CS_MASK_Perm_Zero 0x00000080
 #define CS_MASK_Clear_Perm_Zero 0xFFFFFF7F
 
@@ -60,6 +61,30 @@ union SCRs {
 #define CS_MASK_TB 0x00000001
 #define CS_MASK_Clear_TB 0xFFFFFFFE
 
+// Machine/Program Check Status Masks pg. 11-86
+#define MCS_MASK_ProcChanChk			0x00008000
+#define MCS_MASK_ParityChk				0x00002000
+#define MCS_MASK_InstTimeout			0x00001000
+#define MCS_MASK_DataTimeout			0x00000800
+#define MCS_MASK_ProcChanTimeout	0x00000400
+#define MCS_MASK_IOTrap						0x00000200
+#define PCS_MASK_PCKnownOrig			0x00000080
+#define PCS_MASK_PCUnknownOrig		0x00000040
+#define PCS_MASK_ProgTrap					0x00000020
+#define PCS_MASK_PrivInstExcp			0x00000010
+#define PCS_MASK_IllegalOpCode		0x00000008
+#define PCS_MASK_InstAddrExcp			0x00000004
+#define PCS_MASK_DataAddrExcp			0x00000002
+
+// ICS Masks pg. 11-24
+#define ICS_MASK_ParityErrRetry		0x00001000
+#define ICS_MASK_MemProtect				0x00000800
+#define ICS_MASK_UnprivState			0x00000400
+#define ICS_MASK_TranslateState		0x00000200
+#define ICS_MASK_IntMask					0x00000100
+#define ICS_MASK_CheckStopMask		0x00000080
+#define ICS_MASK_ProcPriority			0x00000007
+
 /*
 struct OldPS {
 	uint32_t OldIAR;
@@ -68,8 +93,8 @@ struct OldPS {
 };
 */
 
-void procinit (void);
-void printregs(void);
+uint32_t* procinit (void);
+union SCRs* getSCRptr (void);
 void progcheck (void);
 void lt_eq_gt_flag_check (uint32_t val);
 void algebretic_cmp (uint32_t val1, uint32_t val2);
