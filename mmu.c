@@ -18,7 +18,11 @@ uint32_t lockbits = 0;
 uint32_t* ICSptr;
 uint8_t lastUsedTLB[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-static const uint32_t specsizelookup[16] = { 0, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 131071, 262143, 524287, 1048575, 2097151, 4194303, 8388607, 16777215};
+static const uint32_t specsizelookup[16] = {0, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 131071, 262143, 524287, 1048575, 2097151, 4194303, 8388607, 16777215};
+// Used in HAT/IPT Base address calculation, the value is how far left to shift and thus "multiply" the result
+static const uint32_t HATIPTBaseAddrMultLookup[32] = {0, 9, 9, 9, 9, 9, 9, 9, 10, 11, 12, 13, 14, 15, 16, 17, 0, 8, 8, 8, 8, 8, 8, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+
+static const uint32_t HATAddrGenMask[32] = {0, 0x0000001F, 0x0000001F, 0x0000001F, 0x0000001F, 0x0000001F, 0x0000001F, 0x0000001F, 0x0000003F, 0x0000007F, 0x000000FF, 0x000001FF, 0x000003FF, 0x000007FF, 0x00000FFF, 0x00001FFF, 0, 0x0000000F, 0x0000000F, 0x0000000F, 0x0000000F, 0x0000000F, 0x0000000F, 0x0000000F, 0x0000001F, 0x0000003F, 0x0000007F, 0x000000FF, 0x000001FF, 0x000003FF, 0x000007FF, 0x00000FFF};
 
 void rominit (const char *file) {
 	FILE *f = fopen(file, "rb");
@@ -94,47 +98,100 @@ uint32_t realread (uint32_t addr, uint8_t bytes) {
 	return data;
 }
 
-/*
-void reloadTLB () {
-	
-}
-*/
+uint32_t findIPT (uint32_t genAddrTag, uint32_t TLBNum, uint32_t virtPageIdx, uint32_t segment) {
+	uint32_t segID = (segment & SEGREGSegID) >> 2;
+	int page4k = (iommuregs->TranslationCtrl & TRANSCTRLPageSize) ? 1 : 0;
+	uint32_t realPgMask = page4k? TLBRealPgNum4K : TLBRealPgNum2K;
+	uint32_t lookupIdx = ((iommuregs->TranslationCtrl & TRANSCTRLPageSize) >> 4) | (iommuregs->RAMSpec & RAMSPECSize);
+	uint32_t baseAddrHATIPT = page4k ? (iommuregs->TranslationCtrl & TRANSCTRLHATIPTBaseAddr4K) : (iommuregs->TranslationCtrl & TRANSCTRLHATIPTBaseAddr2K);
+	baseAddrHATIPT = baseAddrHATIPT << HATIPTBaseAddrMultLookup[lookupIdx];
+	uint32_t effectiveAddrBits = page4k ? (virtPageIdx >> 1) : virtPageIdx;
+	uint32_t offsetHAT = ((effectiveAddrBits ^ segID) & HATAddrGenMask[lookupIdx]) << 4;
 
-uint32_t checkTLB (uint32_t segID, int	segIDoffset, uint32_t virtPageIdx, uint32_t pageDisp, uint8_t TLBNum) {
+	uint32_t HATentry;
+	uint32_t IPTentry;
+	uint32_t Ctrlentry;
+	uint32_t HATIPTaddr = baseAddrHATIPT + offsetHAT;
+	
+	HATentry = realread(HATIPTaddr | 0x4, WORD);
+	if (HATentry & HATIPT_EmptyBit) {
+		// TODO: Page Fault Mem Except Reg pg. 11-119
+	} else {
+		HATIPTaddr = baseAddrHATIPT + ((HATentry & HATIPT_HATPtr) >> 12);
+		IPTentry = realread(HATIPTaddr, WORD);
+		HATentry = realread(HATIPTaddr | 0x4, WORD);
+		while (1) {
+			if ((IPTentry & HATIPT_AddrTag) == (genAddrTag | TLBNum)) {
+				// TLB Reload
+				logmsgf(LOGMMU, "MMU: IPT Entry found at: 0x%08X\n", HATIPTaddr);
+				if (lastUsedTLB[TLBNum]) {
+					logmsgf(LOGMMU, "MMU: Reloading TLB0.\n");
+					lastUsedTLB[TLBNum] = 0;
+					iommuregs->TLB0_AddrTagField[TLBNum] = genAddrTag;
+					// Uses HATIPTaddr because its using the previously fetched IPT pointer for the response, not the one in this IPT.
+					iommuregs->TLB0_RealPageNum_VBs_KBs[TLBNum] = ((HATIPTaddr & 0x00001FFF) >> 1) | TLBValidBit | ((IPTentry & HATIPT_Key) >> 30);
+					if (segment & SEGREGSpecial) {
+						iommuregs->TLB0_WB_TransID_LBs[TLBNum] = realread(HATIPTaddr | 0x4, WORD);
+					}
+					return ((iommuregs->TLB0_RealPageNum_VBs_KBs[TLBNum] & realPgMask) << 8);
+				} else {
+					logmsgf(LOGMMU, "MMU: Reloading TLB1.\n");
+					lastUsedTLB[TLBNum] = 1;
+					iommuregs->TLB1_AddrTagField[TLBNum] = genAddrTag;
+					// Uses HATIPTaddr because its using the previously fetched IPT pointer for the response, not the one in this IPT.
+					iommuregs->TLB1_RealPageNum_VBs_KBs[TLBNum] = ((HATIPTaddr & 0x00001FFF) >> 1) | TLBValidBit | ((IPTentry & HATIPT_Key) >> 30);
+					if (segment & SEGREGSpecial) {
+						iommuregs->TLB1_WB_TransID_LBs[TLBNum] = realread(HATIPTaddr | 0x4, WORD);
+					}
+					return ((iommuregs->TLB1_RealPageNum_VBs_KBs[TLBNum] & realPgMask) << 8);
+				}
+			} else {
+				if (HATentry & HATIPT_LastBit) {
+					// TODO: Page Fault Mem Except Reg pg. 11-119
+					break;
+				} else {
+					HATIPTaddr = baseAddrHATIPT + ((HATentry & HATIPT_IPTPtr) << 4);
+					IPTentry = realread(HATIPTaddr, WORD);
+					HATentry = realread(HATIPTaddr | 0x4, WORD);
+				}
+			}
+		};
+	}
+	return 0xFFFFFFFF;
+}
+
+uint32_t checkTLB (uint32_t segment, uint32_t virtPageIdx, uint32_t pageDisp, uint8_t TLBNum) {
+	uint32_t segID = (segment & SEGREGSegID) >> 2;
+	uint32_t realPgMask = (iommuregs->TranslationCtrl & TRANSCTRLPageSize) ? TLBRealPgNum4K : TLBRealPgNum2K;
 	uint32_t realAddr;
-	if (iommuregs->TLB0_AddrTagField[TLBNum] == ((segID << segIDoffset) & (virtPageIdx & 0x0000FFF0))) {
+	uint32_t hashAnchorTableEntry;
+	uint32_t genAddrTag = ((segID << 17) | (virtPageIdx & 0x0001FFF0));
+
+	if (iommuregs->TLB0_AddrTagField[TLBNum] == genAddrTag) {
 		if (iommuregs->TLB0_RealPageNum_VBs_KBs[TLBNum] & TLBValidBit) {
 			lastUsedTLB[TLBNum] = 0;
-			realAddr = ((iommuregs->TLB0_RealPageNum_VBs_KBs[TLBNum] & TLBRealPgNum4K) << 16) & pageDisp;
+			realAddr = ((iommuregs->TLB0_RealPageNum_VBs_KBs[TLBNum] & realPgMask) << 8) | pageDisp;
 		} else {
-			logmsgf(LOGMMU, "MMU: TLB0 Invalid. Loading TLB0.\n");
+			logmsgf(LOGMMU, "MMU: TLB0 Addr Tag matched but invalid. Searching HAT/IPT.\n");
+			realAddr = findIPT(genAddrTag, TLBNum, virtPageIdx, segment) | pageDisp;
 		}
-	} else if (iommuregs->TLB1_AddrTagField[TLBNum] == ((segID << segIDoffset) & (virtPageIdx & 0xFFFFFFF0))) {
+	} else if (iommuregs->TLB1_AddrTagField[TLBNum] == genAddrTag) {
 		if (iommuregs->TLB1_RealPageNum_VBs_KBs[TLBNum] & TLBValidBit) {
 			lastUsedTLB[TLBNum] = 1;
-			realAddr = ((iommuregs->TLB1_RealPageNum_VBs_KBs[TLBNum] & TLBRealPgNum4K) << 16) & pageDisp;
+			realAddr = ((iommuregs->TLB1_RealPageNum_VBs_KBs[TLBNum] & realPgMask) << 8) | pageDisp;
 		} else {
-			logmsgf(LOGMMU, "MMU: TLB1 Invalid. Loading TLB1.\n");
+			logmsgf(LOGMMU, "MMU: TLB0 Addr Tag matched but invalid. Searching HAT/IPT.\n");
+			realAddr = findIPT(genAddrTag, TLBNum, virtPageIdx, segment) | pageDisp;
 		}
 	} else {
-		logmsgf(LOGMMU, "MMU: Both TLB0 and TLB1 are stale. ");
-		if (lastUsedTLB[TLBNum]) {
-			logmsgf(LOGMMU, "Reloading TLB0.\n");
-			lastUsedTLB[TLBNum] = 0;
-
-		} else {
-			logmsgf(LOGMMU, "Reloading TLB1.\n");
-			lastUsedTLB[TLBNum] = 1;
-
-		}
+		logmsgf(LOGMMU, "MMU: Both TLB0 and TLB1 are stale. Searching HAT/IPT.\n");
+		realAddr = findIPT(genAddrTag, TLBNum, virtPageIdx, segment);
 	}
 
 	return realAddr;
 }
 
 uint32_t translateaddr(uint32_t addr, uint32_t segment) {
-	uint32_t segID;
-	int	segIDoffset;
 	uint32_t virtPageIdx;
 	uint32_t pageDisp;
 	uint8_t TLBNum;
@@ -144,22 +201,18 @@ uint32_t translateaddr(uint32_t addr, uint32_t segment) {
 		return addr & 0x00FFFFFF;
 	} else if (iommuregs->TranslationCtrl & TRANSCTRLPageSize) {
 		// 4K Pages
-		segID = (segment & SEGREGSegID) >> 2;
-		segIDoffset = 16;
-		virtPageIdx = (addr & 0x0FFFF000) >> 12;
+		virtPageIdx = (addr & 0x0FFFF000) >> 11;
 		pageDisp = addr & 0x00000FFF;
 		TLBNum = virtPageIdx & 0x0000000F;
 		
-		realAddr = checkTLB(segID, segIDoffset, virtPageIdx, pageDisp, TLBNum);
+		realAddr = checkTLB(segment, virtPageIdx, pageDisp, TLBNum);
 	} else {
 		// 2K Pages
-		segID = (segment & SEGREGSegID) >> 2;
-		segIDoffset = 15;
 		virtPageIdx = (addr & 0x0FFFF800) >> 11;
 		pageDisp = addr & 0x000007FF;
 		TLBNum = virtPageIdx & 0x0000000F;
 
-		realAddr = checkTLB(segID, segIDoffset, virtPageIdx, pageDisp, TLBNum);
+		realAddr = checkTLB(segment, virtPageIdx, pageDisp, TLBNum);
 	}
 	return realAddr;
 }
@@ -169,18 +222,16 @@ uint32_t translatecheck(uint32_t addr, uint8_t tag) {
 	uint32_t segment = iommuregs->_direct[(addr & 0xF0000000) >> 28];
 	
 	if (segment & SEGREGPresent) {
-		if ((segment & SEGREGProcAcc) && tag != TAG_PROC) {
-			realAddr = translateaddr(addr, segment);
-		} else {
+		if ((segment & SEGREGProcAcc) && tag == TAG_PROC) {
 			// Segment protected from PROC access
 			logmsgf(LOGMMU, "MMU: Error Segment %d is protected from Processor accesses.\n", (addr & 0xF0000000) >> 28);
-		}
-
-		if ((segment & SEGREGIOAcc) && tag != TAG_IO) {
-			realAddr = translateaddr(addr, segment);
-		} else {
+		} else if ((segment & SEGREGIOAcc) && tag == TAG_IO) {
 			// Segment protected from IO access
 			logmsgf(LOGMMU, "MMU: Error Segment %d is protected from I/O accesses.\n", (addr & 0xF0000000) >> 28);
+		} else {
+			realAddr = translateaddr(addr, segment);
+			// TODO: Update R/C bits
+			logmsgf(LOGMMU, "MMU: Address (0x%08X) translated to: 0x%08X\n", addr, realAddr);
 		}
 	} else {
 		// Segment disabled.

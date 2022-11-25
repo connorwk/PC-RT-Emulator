@@ -17,6 +17,8 @@
 
 void rominit (const char *file);
 void mmuinit (uint8_t* memptr, uint32_t* SCRICSptr);
+void realwrite (uint32_t addr, uint32_t data, uint8_t bytes);
+uint32_t realread (uint32_t addr, uint8_t bytes);
 int invalidAddrCheck (uint32_t addr, uint32_t end_addr, uint8_t bytes);
 void procwrite (uint32_t addr, uint32_t data, uint8_t bytes, uint8_t mode, uint8_t tag);
 uint32_t procread (uint32_t addr, uint8_t bytes, uint8_t mode, uint8_t tag);
@@ -84,7 +86,8 @@ uint32_t procread (uint32_t addr, uint8_t bytes, uint8_t mode, uint8_t tag);
 #define TRANSCTRLIntOnCorrECCErr				0x00000800
 #define TRANSCTRLIntOnSuccTLBReload			0x00000400
 #define TRANSCTRLPageSize								0x00000100
-#define TRANSCTRLHATIPTBaseAddr					0x000000FF
+#define TRANSCTRLHATIPTBaseAddr2K				0x0000007F
+#define TRANSCTRLHATIPTBaseAddr4K				0x000000FF
 
 // TLB Real Page Num Format pg. 11-130
 #define TLBRealPgNum2K	0x0000FFF8
@@ -96,6 +99,19 @@ uint32_t procread (uint32_t addr, uint8_t bytes, uint8_t mode, uint8_t tag);
 #define TLBWriteBit				0x01000000
 #define TLBTransactionID	0x00FF0000
 #define TLBLockBits				0x0000FFFF
+
+// HAT/IPT Format pg. 11-102
+#define HATIPT_Key				0xC0000000
+#define HATIPT_AddrTag		0x1FFFFFFF
+
+#define HATIPT_EmptyBit		0x80000000
+#define HATIPT_HATPtr			0x1FFF0000
+#define HATIPT_LastBit		0x00008000
+#define HATIPT_IPTPtr			0x00001FFF
+
+#define HATIPT_SpecWrProt	0x01000000
+#define HATIPT_TID				0x00FF0000
+#define HATIPT_LockBits		0x0000FFFF
 
 /*
  * I/O Address Assignments pg. 11-136

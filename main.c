@@ -12,8 +12,8 @@
 #include "gui.h"
 
 uint8_t *memptr;
-uint32_t *GPR;
-union SCRs *SCR;
+uint32_t *GPRptr;
+union SCRs *SCRptr;
 
 uint64_t ticks = 0;
 int prevSS = 0;
@@ -23,18 +23,22 @@ int halt = 0;
 int main (void) {
 	gui_init();
 	loginit("log.txt");
-	enlogtypes(LOGALL);
+	//enlogtypes(LOGALL);
 	memptr = meminit();
 	rominit("bins/79X34xx.BIN");
 	ioinit();
-	GPR = procinit();
-	SCR = getSCRptr();
-	mmuinit(memptr, &SCR->ICS);
+	SCRptr = getSCRptr();
+	mmuinit(memptr, &SCRptr->ICS);
+	GPRptr = procinit();
 
-	romp_pointers(GPR, SCR);
+	romp_pointers(GPRptr, SCRptr);
 	int close = 0;
 
 	while(!close) {
+		// Enable logging after certain address to save log file size...
+		if (SCRptr->IAR == 0x00003590) {
+			enlogtypes(LOGALL);
+		}
 		if ((SDL_GetTicks64() - ticks) >= 16) {
 			ticks = SDL_GetTicks64();
 			close = gui_update();
@@ -47,14 +51,14 @@ int main (void) {
 			prevCont = getContinueBtn();
 			if (halt) {
 				halt = 0;
-				if (SCR->IAR == getBreakPoint()) {
+				if (SCRptr->IAR == getBreakPoint()) {
 					fetch();
 				}
 			} else {
 				halt = 1;
 			}
 		}
-		if (SCR->IAR == getBreakPoint()) {
+		if (SCRptr->IAR == getBreakPoint()) {
 			halt = 1;
 		}
 		if (!halt) {
