@@ -8,9 +8,12 @@
 #include "logfac.h"
 #include "memory.h"
 
+uint8_t* eccmemptr;
+
 uint8_t* meminit (void) {
 	uint8_t* memptr;
 	memptr = (uint8_t*)malloc(MEMORYSIZE);
+	eccmemptr = (uint8_t*)malloc(MEMORYSIZE/4);
 	return memptr;
 }
 
@@ -64,5 +67,18 @@ uint32_t memread (uint8_t* ptr, uint32_t addr, uint8_t bytes) {
 			data = memgetw(ptr, addr);
 			break;
 	}
+	return data;
+}
+
+void memeccwrite (uint8_t* ptr, uint32_t addr, uint32_t data, uint8_t ECCbits) {
+	memputw(ptr, addr & 0xFFFFFFFC, data);
+	eccmemptr[(addr & 0xFFFFFFFC) >> 2] = ECCbits;
+}
+
+uint64_t memeccread (uint8_t* ptr, uint32_t addr) {
+	uint64_t data;
+	data = eccmemptr[(addr & 0xFFFFFFFC) >> 2];
+	data = data << 32;
+	data |= memgetw(ptr, addr & 0xFFFFFFFC);
 	return data;
 }

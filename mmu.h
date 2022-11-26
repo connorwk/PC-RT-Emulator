@@ -102,6 +102,10 @@ uint32_t proctsh (uint32_t addr, uint8_t bytes, uint8_t tag);
 #define TLBTransactionID	0x00FF0000
 #define TLBLockBits				0x0000FFFF
 
+// RAS Mode Diag Reg Format pg. 11-132
+#define RMDR_ArrayChkBits	0x0000FF00
+#define RMDR_AltChkBits		0x000000FF
+
 // HAT/IPT Format pg. 11-102
 #define HATIPT_Key				0xC0000000
 #define HATIPT_AddrTag		0x1FFFFFFF
