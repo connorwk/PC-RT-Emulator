@@ -802,9 +802,8 @@ void decode (uint32_t inst, uint8_t mode) {
 				// TSH
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		TSH GPR%d, %s+%d\n", SCR.IAR, inst, r2, gpr_or_0(r3), sI16 << 1);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
-				GPR[r2] = procread(r3_reg_or_0 + sI16, HALFWORD, MEMORY, TAG_PROC);
+				GPR[r2] = proctsh(r3_reg_or_0 + sI16, HALFWORD, TAG_PROC);
 				logmsgf(LOGINSTR, "			0x%08X, 0x%08X + %d\n", GPR[r2], r3_reg_or_0,  sI16);
-				procwrite(r3_reg_or_0 + sI16 - 1, 0xFF, BYTE, MEMORY, TAG_PROC);
 				logmsgf(LOGINSTR, "			SET: 0x%08X + %d, 0xFF\n", r3_reg_or_0,  sI16-1);
 				break;
 			case 0xD0:

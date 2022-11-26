@@ -15,6 +15,9 @@
 #define TAG_IO 1
 #define TAG_OVERRIDE 2
 
+#define LOAD 0
+#define STORE 1
+
 void rominit (const char *file);
 void mmuinit (uint8_t* memptr, uint32_t* SCRICSptr);
 void realwrite (uint32_t addr, uint32_t data, uint8_t bytes);
@@ -22,13 +25,11 @@ uint32_t realread (uint32_t addr, uint8_t bytes);
 int invalidAddrCheck (uint32_t addr, uint32_t end_addr, uint8_t bytes);
 void procwrite (uint32_t addr, uint32_t data, uint8_t bytes, uint8_t mode, uint8_t tag);
 uint32_t procread (uint32_t addr, uint8_t bytes, uint8_t mode, uint8_t tag);
+uint32_t proctsh (uint32_t addr, uint8_t bytes, uint8_t tag);
 
 #define MMUCONFIGSIZE 65536
 #define ROMSIZE 65536
 #define MAXREALADDR 16777214
-
-// Lock bits to track locked registers
-#define MEARLOCKBIT 0x00000001
 
 // Memory Address Real/Virtual Map pg. 1-35
 #define IOChanIOMapStartAddr	0xF0000000
@@ -56,6 +57,7 @@ uint32_t procread (uint32_t addr, uint8_t bytes, uint8_t mode, uint8_t tag);
 #define MERTLBSpec		0x00000004
 #define MERProtect		0x00000002
 #define MERData				0x00000001
+#define MERMultiCheck	0x0002004B
 
 // Segment Reg Format pg. 11-127
 #define SEGREGPresent	0x00010000
