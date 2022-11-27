@@ -11,6 +11,7 @@ uint32_t GPR[16];
 union SCRs SCR;
 
 uint32_t wait;
+uint32_t currentIntLevel;
 
 uint32_t* procinit (void) {
 	wait = 0;
@@ -75,12 +76,81 @@ void ov_flag_check (uint64_t val) {
 	}
 }
 
-void progcheck (void) {
+// TODO: Address translation is supposed to be disabled for the following PROG_STATUS stores and loads
+void checkInterrupt(void) {
+	uint8_t intLevel = (SCR.IRB & 0x0000FE00) >> 9;
+	
+	switch(intLevel) {
+		case 0x40:
+			intLevel = 0;
+			break;
+		case 0x20:
+			intLevel = 1;
+			break;
+		case 0x10:
+			intLevel = 2;
+			break;
+		case 0x08:
+			intLevel = 3;
+			break;
+		case 0x04:
+			intLevel = 4;
+			break;
+		case 0x02:
+			intLevel = 5;
+			break;
+		case 0x01:
+			intLevel = 6;
+			break;
+		default:
+			intLevel = 255;
+	}
+
+	if ((intLevel < (SCR.ICS & ICS_MASK_ProcPriority)) && !(SCR.ICS & ICS_MASK_IntMask)) {
+		//currentIntLevel = (SCR.IRB & 0x0000FE00);
+		logmsgf(LOGPROC, "PROC: Interrupt hit at level %d below Proc Priority %d.\n", intLevel, SCR.ICS & ICS_MASK_ProcPriority);
+		uint32_t psOffset = intLevel;
+		SCR.IRB |= 0x00008000 >> intLevel;
+		psOffset = PROG_STATUS_0 + (psOffset << 4);
+		procwrite(psOffset, SCR.IAR, WORD, MEMORY, TAG_PROC);
+		procwrite(psOffset+4, SCR.ICS, HALFWORD, MEMORY, TAG_PROC);
+		procwrite(psOffset+6, SCR.CS, HALFWORD, MEMORY, TAG_PROC);
+		SCR.IAR = procread(psOffset+8, WORD, MEMORY, TAG_PROC);
+		SCR.ICS = procread(psOffset+12, HALFWORD, MEMORY, TAG_PROC);
+		SCR.CS = procread(psOffset+14, HALFWORD, MEMORY, TAG_PROC);
+		logmsgf(LOGPROC, "			Regs: IAR: 0x%08X ICS: 0x%08X CS: 0x%08X\n", SCR.IAR, SCR.ICS, SCR.CS);
+	}
+}
+
+void progcheck (uint32_t PCSBits) {
+	currentIntLevel = 0x00008000 >> 7;
 	logmsgf(LOGPROC, "PROC: Error Program Check.\n");
+	SCR.MCSPCS = PCSBits;
 	procwrite(PROG_STATUS_PC, SCR.IAR, WORD, MEMORY, TAG_PROC);
 	procwrite(PROG_STATUS_PC+4, SCR.ICS, HALFWORD, MEMORY, TAG_PROC);
 	procwrite(PROG_STATUS_PC+6, SCR.CS, HALFWORD, MEMORY, TAG_PROC);
-	// TODO
+	SCR.IAR = procread(PROG_STATUS_PC+8, WORD, MEMORY, TAG_PROC);
+	SCR.ICS = procread(PROG_STATUS_PC+12, HALFWORD, MEMORY, TAG_PROC);
+	logmsgf(LOGPROC, "			Regs: IAR: 0x%08X ICS: 0x%08X CS: 0x%08X\n", SCR.IAR, SCR.ICS, SCR.CS);
+	return;
+}
+
+void machcheck (uint32_t MCSBits) {
+	if (SCR.ICS & ICS_MASK_CheckStopMask) {
+		currentIntLevel = 0x00008000 >> 8;
+		logmsgf(LOGPROC, "PROC: Error Machine Check.\n");
+		SCR.MCSPCS = MCSBits;
+		procwrite(PROG_STATUS_MC, SCR.IAR, WORD, MEMORY, TAG_PROC);
+		procwrite(PROG_STATUS_MC+4, SCR.ICS, HALFWORD, MEMORY, TAG_PROC);
+		procwrite(PROG_STATUS_MC+6, SCR.CS, HALFWORD, MEMORY, TAG_PROC);
+		SCR.IAR = procread(PROG_STATUS_MC+8, WORD, MEMORY, TAG_PROC);
+		SCR.ICS = procread(PROG_STATUS_MC+12, HALFWORD, MEMORY, TAG_PROC);
+		logmsgf(LOGPROC, "			Regs: IAR: 0x%08X ICS: 0x%08X CS: 0x%08X\n", SCR.IAR, SCR.ICS, SCR.CS);
+	} else {
+		// TODO: Checkstop!
+		logmsgf(LOGPROC, "PROC: CHECKSTOP.\n");
+	}
+	
 	return;
 }
 
@@ -88,6 +158,7 @@ uint32_t fetch (void) {
 	uint32_t inst;
 	// TODO: Interrupt, error, POR to clear wait state.
 	if (wait) {return 1;}
+	checkInterrupt();
 	inst = procread(SCR.IAR, INST, MEMORY, TAG_PROC);
 	decode(inst, NORMEXEC);
 	return 0;
@@ -120,7 +191,7 @@ void decode (uint32_t inst, uint8_t mode) {
 					// JB
 					logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		JB %s,%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, getCSname((r1 & 0x7)+8), JI);
 					if (mode == DIRECTEXEC) {
-						progcheck();
+						progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 						return;
 					}
 					if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
@@ -131,7 +202,7 @@ void decode (uint32_t inst, uint8_t mode) {
 					// JNB
 					logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		JNB %s,%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, getCSname((r1 & 0x7)+8), JI);
 					if (mode == DIRECTEXEC) {
-						progcheck();
+						progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 						return;
 					}
 					if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
@@ -197,7 +268,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// BNB
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	BNB %s,%d\n", SCR.IAR, inst, getCSname(r2), sI16 << 1);
 				if (mode == DIRECTEXEC) {
-					progcheck();
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
 				}
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
@@ -209,7 +280,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// BNBX
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	BNBX %s,%d\n", SCR.IAR, inst, getCSname(r2), sI16 << 1);
 				if (mode == DIRECTEXEC) {
-					progcheck();
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
 				}
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
@@ -223,7 +294,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// BALA
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	BALA 0x%06X\n", SCR.IAR, inst, BA);
 				if (mode == DIRECTEXEC) {
-					progcheck();
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
 				}
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
@@ -235,7 +306,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// BALAX
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	BALAX 0x%06X\n	SUB", SCR.IAR, inst, BA);
 				if (mode == DIRECTEXEC) {
-					progcheck();
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
 				}
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
@@ -248,7 +319,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// BALI
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	BALI GPR%d, %d\n", SCR.IAR, inst, r2, sI16 << 1);
 				if (mode == DIRECTEXEC) {
-					progcheck();
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
 				}
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
@@ -260,7 +331,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// BALIX
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	BALIX GPR%d, %d\n SUB", SCR.IAR, inst, r2, sI16 << 1);
 				if (mode == DIRECTEXEC) {
-					progcheck();
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
 				}
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
@@ -273,7 +344,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// BB
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	BB %s,%d\n", SCR.IAR, inst, getCSname(r2), sI16 << 1);
 				if (mode == DIRECTEXEC) {
-					progcheck();
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
 				}
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
@@ -285,7 +356,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// BBX
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	BBX %s,%d\n", SCR.IAR, inst, getCSname(r2), sI16 << 1);
 				if (mode == DIRECTEXEC) {
-					progcheck();
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
 				}
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
@@ -666,8 +737,9 @@ void decode (uint32_t inst, uint8_t mode) {
 			case 0xC0:
 				// SVC
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	SVC %s+%d\n", SCR.IAR, inst, gpr_or_0(r3), sI16);
+				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
 				if (mode == DIRECTEXEC) {
-					progcheck();
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
 				}
 				if (r2 != 0x0) {logmsgf(LOGPROC, "PROC: Warning SVC Nibble2 should be zero. IAR: 0x%08X\n", SCR.IAR);}
@@ -773,8 +845,8 @@ void decode (uint32_t inst, uint8_t mode) {
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
 				addr = r3_reg_or_0 + I16;
 				if (addr & 0xFF000000) {
-					SCR.MCSPCS |= 0x00000082;
-					progcheck();
+					//SCR.MCSPCS |= 0x00000082;
+					progcheck(0);
 				}
 				GPR[r2] = procread(addr, WORD, PIO, TAG_PROC);
 				logmsgf(LOGINSTR, "			0x%08X, 0x%08X + %d\n", GPR[r2], r3_reg_or_0, I16);
@@ -811,14 +883,20 @@ void decode (uint32_t inst, uint8_t mode) {
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	LPS 0x%X, %s+%d\n", SCR.IAR, inst, r2, gpr_or_0(r3), sI16);
 				logmsgf(LOGINSTR, "			0x%08X + %d\n", r3_reg_or_0,  sI16);
 				if (mode == DIRECTEXEC) {
-					progcheck();
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
 				}
 				if (r2 & 0xC) {logmsgf(LOGPROC, "PROC: Warning LPS Nibble2 upper bits should be zero. IAR: 0x%08X\n", SCR.IAR);}
 				SCR.IAR = procread(r3_reg_or_0 + sI16, WORD, MEMORY, TAG_PROC);
 				SCR.ICS = procread(r3_reg_or_0 + sI16 + 4, HALFWORD, MEMORY, TAG_PROC);
 				SCR.CS = procread(r3_reg_or_0 + sI16 + 6, HALFWORD, MEMORY, TAG_PROC);
-				SCR.MCSPCS = 0;
+				if (currentIntLevel & (0x00008000 >> 7)) {
+					currentIntLevel &= ~(0x00008000 >> 7);
+					SCR.MCSPCS = SCR.MCSPCS & 0x0000FF00;
+				} else if (currentIntLevel & (0x00008000 >> 8)) {
+					currentIntLevel &= ~(0x00008000 >> 8);
+					SCR.MCSPCS = SCR.MCSPCS & 0x000000FF;
+				}
 				logmsgf(LOGINSTR, "			Regs: IAR: 0x%08X ICS: 0x%08X CS: 0x%08X\n", SCR.IAR, SCR.ICS, SCR.CS);
 				// TODO: if machine check level, MCS content set to 0
 				// TODO: if bit 10, pending mem operations restarted before instr execution resumed, ECR (SCR 9) contains count and mem addr.
@@ -927,8 +1005,8 @@ void decode (uint32_t inst, uint8_t mode) {
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
 				addr = r3_reg_or_0 + I16;
 				if (addr & 0xFF000000) {
-					SCR.MCSPCS |= 0x00000082;
-					progcheck();
+					//SCR.MCSPCS |= 0x00000082;
+					progcheck(0);
 				}
 				procwrite(addr, GPR[r2], WORD, PIO, TAG_PROC);
 				break;
@@ -1045,7 +1123,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// BNBR
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X	BNBR %s,GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, getCSname(r2), r3);
 				if (mode == DIRECTEXEC) {
-					progcheck();
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
 				}
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
@@ -1057,7 +1135,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// BNBRX
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X	BNBRX %s,GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, getCSname(r2), r3);
 				if (mode == DIRECTEXEC) {
-					progcheck();
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
 				}
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
@@ -1078,7 +1156,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// BALR
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		BALR GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				if (mode == DIRECTEXEC) {
-					progcheck();
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
 				}
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
@@ -1090,7 +1168,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// BALRX
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		BALRX GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				if (mode == DIRECTEXEC) {
-					progcheck();
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
 				}
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
@@ -1103,7 +1181,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// BBR
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X	BBR %s,GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, getCSname(r2), r3);
 				if (mode == DIRECTEXEC) {
-					progcheck();
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
 				}
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
@@ -1115,7 +1193,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// BBRX
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X	BBRX %s,GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, getCSname(r2), r3);
 				if (mode == DIRECTEXEC) {
-					progcheck();
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
 				}
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
@@ -1129,7 +1207,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// WAIT
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X	WAIT\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, getCSname(r2), r3);
 				if (mode == DIRECTEXEC) {
-					progcheck();
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
 				}
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
@@ -1247,6 +1325,7 @@ void decode (uint32_t inst, uint8_t mode) {
 			default:
 				// Unexpected Instruction Program-Check
 				logmsgf(LOGPROC, "PROC: Error unexpected Instruction IAR: 0x%08X, Instruction Word: 0x%08X\n", SCR.IAR, inst);
+				progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 				break;
 		}
 	}

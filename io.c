@@ -11,10 +11,13 @@ struct SysBrdConfig sysbrdcnfg;
 
 void ioinit (void) {
 	//Any Init required
-	sysbrdcnfg.CSR = 0x404000FF;
+	sysbrdcnfg.CSR = CSR_ReservedBits;
+	sysbrdcnfg.CRRAReg = 0xFF;
+	sysbrdcnfg.CRRBReg = 0xFF;
 }
 
 void iowrite (uint32_t addr, uint32_t data, uint8_t bytes) {
+	logmsgf(LOGMMU, "IO: IO Write 0x%08X : 0x%08X\n", addr, data);
 	if (addr >= 0xF0008000 && addr <= 0xF0008003) {
 		sysbrdcnfg.Z8530[addr & 0x00000003] = data;
 	} else if (addr >= 0xF0008020 && addr <= 0xF0008023) {
@@ -52,13 +55,14 @@ void iowrite (uint32_t addr, uint32_t data, uint8_t bytes) {
 	} else if (addr >= 0xF0008C80 && addr <= 0xF0008C83) {
 		logmsgf(LOGMMU, "IO: Error can't write to Memory Config Reg 0x%08X\n", addr);
 	} else if (addr >= 0xF0008CA0 && addr <= 0xF0008CA3) {
+		// Diagnostic Interrupt Activate Register pg. 5-58
 		sysbrdcnfg.DIAReg = data;
 	} else if (addr >= 0xF0010000 && addr <= 0xF00107FF && addr & 0x00000001) {
 		logmsgf(LOGMMU, "IO: Error unaligned read from TCW 0x%08X\n", addr);
 	} else if (addr >= 0xF0010000 && addr <= 0xF00107FF) {
 		sysbrdcnfg.TCW[(addr & 0x000007FE) >> 1] = data;
 	} else if (addr >= 0xF0010800 && addr <= 0xF0010FFF) {
-		sysbrdcnfg.CSR = data;
+		sysbrdcnfg.CSR = data | CSR_ReservedBits;
 	} else {
 		logmsgf(LOGMMU, "IO: Error IO write to non-existant IO addr 0x%08X: 0x%08X\n", addr, data);
 	}
@@ -115,5 +119,6 @@ uint32_t ioread (uint32_t addr, uint8_t bytes) {
 	} else {
 		logmsgf(LOGMMU, "IO: Error IO read to non-existant IO addr 0x%08X\n", addr);
 	}
+	logmsgf(LOGMMU, "IO: IO Read  0x%08X : 0x%08X\n", addr, data);
 	return data;
 }

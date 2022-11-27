@@ -123,10 +123,16 @@ void updateMERandMEAR (uint32_t merBit) {
 			iommuregs->MemException |= MERUnCorrECC;
 			loadMEAR();
 			MEARlocked = 1;
-			iommuregs->RASModeDiag = (ECCbits << 8);
-			RMDRlocked = 1;
+			if (RMDRlocked != 2) {
+				iommuregs->RASModeDiag = (iommuregs->RASModeDiag & RMDR_AltChkBits) | (ECCbits << 8);
+				RMDRlocked = 2;
+			}
 			if (!(iommuregs->TranslationCtrl & TRANSCTRLEnblRasDiag)) {
-				// Machine Check Interrupt
+				// Exception reply for Read or Translated Write
+				if (!loadOrStore || (loadOrStore && (*ICSptr & ICS_MASK_TranslateMode))) {
+					progcheck(0);
+				}
+				machcheck(0);
 			}
 			break;
 		case MERCorrECC:
@@ -134,10 +140,12 @@ void updateMERandMEAR (uint32_t merBit) {
 				iommuregs->MemException |= MERCorrECC;
 				loadMEAR();
 				MEARlocked = 1;
-				iommuregs->RASModeDiag = (ECCbits << 8);
-				RMDRlocked = 1;
+				if ((iommuregs->TranslationCtrl & TRANSCTRLIntOnCorrECCErr) || (iommuregs->TranslationCtrl & TRANSCTRLEnblRasDiag)) {
+					iommuregs->RASModeDiag = (iommuregs->RASModeDiag & RMDR_AltChkBits) | (ECCbits << 8);
+					RMDRlocked = 1;
+				}
 				if ((iommuregs->TranslationCtrl & TRANSCTRLIntOnCorrECCErr) && !(iommuregs->TranslationCtrl & TRANSCTRLEnblRasDiag)) {
-					// Machine Check Interrupt
+					machcheck(0);
 				}
 			}
 			break;
@@ -680,7 +688,9 @@ uint32_t procread (uint32_t addr, uint8_t bytes, uint8_t mode, uint8_t inputtag)
 			logmsgf(LOGMMU, "MMU: Read from IOMMU Regs Decoded 0x%08X: 0x%08X\n", addr & 0x0000FFFF, data);
 			switch ((addr & 0x0000FFFF)) {
 				case 0x0011:
-					MEARlocked = 0;
+					if (RMDRlocked != 2) {
+						MEARlocked = 0;
+					}
 					break;
 				case 0x0018:
 					RMDRlocked = 0;

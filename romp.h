@@ -95,7 +95,9 @@ struct OldPS {
 
 uint32_t* procinit (void);
 union SCRs* getSCRptr (void);
-void progcheck (void);
+void checkInterrupt(void);
+void progcheck (uint32_t PCSBits);
+void machcheck (uint32_t PCSBits);
 void lt_eq_gt_flag_check (uint32_t val);
 void algebretic_cmp (uint32_t val1, uint32_t val2);
 void logical_cmp (uint32_t val1, uint32_t val2);

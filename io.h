@@ -8,6 +8,24 @@ void ioinit (void);
 void iowrite (uint32_t addr, uint32_t data, uint8_t bytes);
 uint32_t ioread (uint32_t addr, uint8_t bytes);
 
+// CSR Format pg. 5-63
+#define CSR_ExcepReported			0x80000000
+#define CSR_IntPending				0x40000000
+#define CSR_EPOW							0x10000000
+#define CSR_SoftReset					0x08000000
+#define CSR_SysAttn						0x04000000
+#define CSR_PIOError					0x01000000
+#define CSR_DMAErrorChanBits	0x00FF0000
+#define CSR_PIODMA						0x00008000
+#define CSR_ProtViolation			0x00004000
+#define CSR_InvalidOp					0x00002000
+#define CSR_IOChanCheck				0x00001000
+#define CSR_DMAExcep					0x00000800
+#define CSR_ChannelResetCapt	0x00000400
+#define CSR_SystemBoardBsy		0x00000200
+#define CSR_PIOReqPending			0x00000100
+#define CSR_ReservedBits			0x404000FF
+
 /*
  * I/O Address Assignments pg. 11-136
  */
