@@ -4,12 +4,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "defs.h"
 #include "mmu.h"
 #include "romp.h"
 #include "memory.h"
-#include "io.h"
+#include "iocc.h"
 #include "logfac.h"
 
+
+struct procBusStruct* procBusPtr;
 uint8_t* memory;
 uint8_t* rom;
 
@@ -54,11 +57,11 @@ void rominit (const char *file) {
 	}
 }
 
-void mmuinit (uint8_t* memptr, uint32_t* SCRICSptr) {
+void mmuinit (uint8_t* memptr, struct procBusStruct* procBus) {
 	memory = memptr;
+	procBusPtr = procBus;
 	iommuregs = malloc(MMUCONFIGSIZE*4);
 	memset(iommuregs->_direct, 0, MMUCONFIGSIZE);
-	ICSptr = SCRICSptr;
 }
 
 void loadMEAR(void) {
@@ -68,9 +71,9 @@ void loadMEAR(void) {
 }
 
 void updateMERandMEAR (uint32_t merBit) {
-	logmsgf(LOGMMU, "MMU: Error MERbits to set: 0x%08X MER: 0x%08X Effective Addr: 0x%08X\n", merBit, iommuregs->MemException, effectiveAddr);
 	// If override tag don't set any exception bits...
 	if (tag == TAG_OVERRIDE) {return;}
+	logmsgf(LOGMMU, "MMU: Error MERbits to set: 0x%08X MER: 0x%08X Effective Addr: 0x%08X\n", merBit, iommuregs->MemException, effectiveAddr);
 
 	if (tag == TAG_PROC) {
 		// If SegProt, IPT Spec, Page Fault, Protection, or Data Error is hit

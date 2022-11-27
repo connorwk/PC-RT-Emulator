@@ -93,7 +93,7 @@ struct OldPS {
 };
 */
 
-uint32_t* procinit (void);
+uint32_t* procinit (struct procBusStruct* procBus);
 union SCRs* getSCRptr (void);
 void checkInterrupt(void);
 void progcheck (uint32_t PCSBits);

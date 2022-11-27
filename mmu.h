@@ -3,23 +3,8 @@
 #define _MMU
 #include <stdint.h>
 
-#define BYTE 1
-#define HALFWORD 2
-#define WORD 4
-#define INST 5 // Special for Instruction fetch to NOT ignore LSBs of addr.
-
-#define MEMORY 0
-#define PIO 1
-
-#define TAG_PROC 0
-#define TAG_IO 1
-#define TAG_OVERRIDE 2
-
-#define LOAD 0
-#define STORE 1
-
 void rominit (const char *file);
-void mmuinit (uint8_t* memptr, uint32_t* SCRICSptr);
+void mmuinit (uint8_t* memptr, struct procBusStruct* procBus);
 void realwrite (uint32_t addr, uint32_t data, uint8_t bytes);
 uint32_t realread (uint32_t addr, uint8_t bytes);
 int invalidAddrCheck (uint32_t addr, uint32_t end_addr, uint8_t bytes);

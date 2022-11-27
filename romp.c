@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "defs.h"
 #include "romp.h"
 #include "mmu.h"
 #include "logfac.h"
@@ -10,17 +11,55 @@
 uint32_t GPR[16];
 union SCRs SCR;
 
+struct procBusStruct* procBusPtr;
+
 uint32_t wait;
 uint32_t currentIntLevel;
 
-uint32_t* procinit (void) {
+uint32_t procBusCycle(uint32_t addr, uint32_t data, uint8_t width, uint8_t rw, uint8_t pio_override) {
+	procBusPtr->addr = addr;
+	procBusPtr->data = data;
+	procBusPtr->width = width;
+	procBusPtr->rw = rw;
+	procBusPtr->tag = TAG_PROC;
+	
+	if (SCR.ICS & ICS_MASK_TranslateMode) {
+		procBusPtr->pio = PIO_TRANS;
+	} else {
+		procBusPtr->pio = PIO_REAL;
+	}
+	
+	if (pio_override) {
+		procBusPtr->pio = pio_override;
+	}
+
+	mmuCycle();
+
+	if (procBusPtr->flags & FLAGS_Exception) {
+		if (width == WIDTH_INST) {
+			progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_InstAddrExcp);
+		} else if (SCR.ICS & ICS_MASK_TranslateMode) {
+			progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_DataAddrExcp);
+		} else {
+			progcheck(PCS_MASK_PCUnknownOrig | PCS_MASK_DataAddrExcp);
+		}
+	}
+	if (procBusPtr->flags & FLAGS_Trap) {
+		machcheck(MCS_MASK_IOTrap);
+	}
+
+	return procBusPtr->data;
+}
+
+uint32_t* procinit (struct procBusStruct* procBus) {
+	procBusPtr = procBus;
 	wait = 0;
 	for (uint8_t i=0; i < 16; i++) {
 		GPR[i] = 0x00000000;
 		SCR._direct[i] = 0x00000000;
 	}
 	// Initial IAR from 000000? pg. 11-140
-	SCR.IAR = procread(SCR.IAR, WORD, MEMORY, TAG_PROC);
+	SCR.IAR = procBusCycle(SCR.IAR, 0, WIDTH_WORD, RW_LOAD, 0);
 	return &GPR[0];
 }
 
@@ -78,32 +117,24 @@ void ov_flag_check (uint64_t val) {
 
 // TODO: Address translation is supposed to be disabled for the following PROG_STATUS stores and loads
 void checkInterrupt(void) {
-	uint8_t intLevel = (SCR.IRB & 0x0000FE00) >> 9;
+	uint8_t intLevel = ((SCR.IRB & 0x0000FE00) >> 9 || procBusPtr->intrpt);
 	
-	switch(intLevel) {
-		case 0x40:
-			intLevel = 0;
-			break;
-		case 0x20:
-			intLevel = 1;
-			break;
-		case 0x10:
-			intLevel = 2;
-			break;
-		case 0x08:
-			intLevel = 3;
-			break;
-		case 0x04:
-			intLevel = 4;
-			break;
-		case 0x02:
-			intLevel = 5;
-			break;
-		case 0x01:
-			intLevel = 6;
-			break;
-		default:
-			intLevel = 255;
+	if (intLevel & 0x40) {
+		intLevel = 0;
+	} else if (intLevel & 0x20) {
+		intLevel = 1;
+	} else if (intLevel & 0x10) {
+		intLevel = 2;
+	} else if (intLevel & 0x08) {
+		intLevel = 3;
+	} else if (intLevel & 0x04) {
+		intLevel = 4;
+	} else if (intLevel & 0x02) {
+		intLevel = 5;
+	} else if (intLevel & 0x01) {
+		intLevel = 6;
+	} else {
+		intLevel = 255;
 	}
 
 	if ((intLevel < (SCR.ICS & ICS_MASK_ProcPriority)) && !(SCR.ICS & ICS_MASK_IntMask)) {
@@ -112,12 +143,12 @@ void checkInterrupt(void) {
 		uint32_t psOffset = intLevel;
 		SCR.IRB |= 0x00008000 >> intLevel;
 		psOffset = PROG_STATUS_0 + (psOffset << 4);
-		procwrite(psOffset, SCR.IAR, WORD, MEMORY, TAG_PROC);
-		procwrite(psOffset+4, SCR.ICS, HALFWORD, MEMORY, TAG_PROC);
-		procwrite(psOffset+6, SCR.CS, HALFWORD, MEMORY, TAG_PROC);
-		SCR.IAR = procread(psOffset+8, WORD, MEMORY, TAG_PROC);
-		SCR.ICS = procread(psOffset+12, HALFWORD, MEMORY, TAG_PROC);
-		SCR.CS = procread(psOffset+14, HALFWORD, MEMORY, TAG_PROC);
+		procBusCycle(psOffset, SCR.IAR, WIDTH_WORD, RW_STORE, PIO_REAL);
+		procBusCycle(psOffset+4, SCR.ICS, WIDTH_HALFWORD, RW_STORE, PIO_REAL);
+		procBusCycle(psOffset+6, SCR.CS, WIDTH_HALFWORD, RW_STORE, PIO_REAL);
+		SCR.IAR = procBusCycle(psOffset+8, 0, WIDTH_WORD, RW_LOAD, PIO_REAL);
+		SCR.ICS = procBusCycle(psOffset+12, 0, WIDTH_WORD, RW_LOAD, PIO_REAL);
+		SCR.CS = procBusCycle(psOffset+14, 0, WIDTH_WORD, RW_LOAD, PIO_REAL);
 		logmsgf(LOGPROC, "			Regs: IAR: 0x%08X ICS: 0x%08X CS: 0x%08X\n", SCR.IAR, SCR.ICS, SCR.CS);
 	}
 }
@@ -126,11 +157,11 @@ void progcheck (uint32_t PCSBits) {
 	currentIntLevel = 0x00008000 >> 7;
 	logmsgf(LOGPROC, "PROC: Error Program Check.\n");
 	SCR.MCSPCS = PCSBits;
-	procwrite(PROG_STATUS_PC, SCR.IAR, WORD, MEMORY, TAG_PROC);
-	procwrite(PROG_STATUS_PC+4, SCR.ICS, HALFWORD, MEMORY, TAG_PROC);
-	procwrite(PROG_STATUS_PC+6, SCR.CS, HALFWORD, MEMORY, TAG_PROC);
-	SCR.IAR = procread(PROG_STATUS_PC+8, WORD, MEMORY, TAG_PROC);
-	SCR.ICS = procread(PROG_STATUS_PC+12, HALFWORD, MEMORY, TAG_PROC);
+	procBusCycle(PROG_STATUS_PC, SCR.IAR, WIDTH_WORD, RW_STORE, PIO_REAL);
+	procBusCycle(PROG_STATUS_PC+4, SCR.ICS, WIDTH_HALFWORD, RW_STORE, PIO_REAL);
+	procBusCycle(PROG_STATUS_PC+6, SCR.CS, WIDTH_HALFWORD, RW_STORE, PIO_REAL);
+	SCR.IAR = procBusCycle(PROG_STATUS_PC+8, 0, WIDTH_WORD, RW_LOAD, PIO_REAL);
+	SCR.ICS = procBusCycle(PROG_STATUS_PC+12, 0, WIDTH_WORD, RW_LOAD, PIO_REAL);
 	logmsgf(LOGPROC, "			Regs: IAR: 0x%08X ICS: 0x%08X CS: 0x%08X\n", SCR.IAR, SCR.ICS, SCR.CS);
 	return;
 }
@@ -140,11 +171,11 @@ void machcheck (uint32_t MCSBits) {
 		currentIntLevel = 0x00008000 >> 8;
 		logmsgf(LOGPROC, "PROC: Error Machine Check.\n");
 		SCR.MCSPCS = MCSBits;
-		procwrite(PROG_STATUS_MC, SCR.IAR, WORD, MEMORY, TAG_PROC);
-		procwrite(PROG_STATUS_MC+4, SCR.ICS, HALFWORD, MEMORY, TAG_PROC);
-		procwrite(PROG_STATUS_MC+6, SCR.CS, HALFWORD, MEMORY, TAG_PROC);
-		SCR.IAR = procread(PROG_STATUS_MC+8, WORD, MEMORY, TAG_PROC);
-		SCR.ICS = procread(PROG_STATUS_MC+12, HALFWORD, MEMORY, TAG_PROC);
+		procBusCycle(PROG_STATUS_MC, SCR.IAR, WIDTH_WORD, RW_STORE, PIO_REAL);
+		procBusCycle(PROG_STATUS_MC+4, SCR.ICS, WIDTH_HALFWORD, RW_STORE, PIO_REAL);
+		procBusCycle(PROG_STATUS_MC+6, SCR.CS, WIDTH_HALFWORD, RW_STORE, PIO_REAL);
+		SCR.IAR = procBusCycle(PROG_STATUS_MC+8, 0, WIDTH_WORD, RW_LOAD, PIO_REAL);
+		SCR.ICS = procBusCycle(PROG_STATUS_MC+12, 0, WIDTH_WORD, RW_LOAD, PIO_REAL);
 		logmsgf(LOGPROC, "			Regs: IAR: 0x%08X ICS: 0x%08X CS: 0x%08X\n", SCR.IAR, SCR.ICS, SCR.CS);
 	} else {
 		// TODO: Checkstop!
@@ -159,7 +190,7 @@ uint32_t fetch (void) {
 	// TODO: Interrupt, error, POR to clear wait state.
 	if (wait) {return 1;}
 	checkInterrupt();
-	inst = procread(SCR.IAR, INST, MEMORY, TAG_PROC);
+	inst = procBusCycle(SCR.IAR, 0, WIDTH_INST, RW_LOAD, 0);
 	decode(inst, NORMEXEC);
 	return 0;
 }
@@ -216,34 +247,34 @@ void decode (uint32_t inst, uint8_t mode) {
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		STCS %s+%d,GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, gpr_or_0(r3), r1, r2);
 				logmsgf(LOGINSTR, "			0x%08X + %d: 0x%08X\n", r3_reg_or_0, r1, GPR[r2]);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
-				procwrite(r3_reg_or_0 + r1, GPR[r2], BYTE, MEMORY, TAG_PROC);
+				procBusCycle(r3_reg_or_0 + r1, GPR[r2], WIDTH_BYTE, RW_STORE, 0);
 				break;
 			case 2:
 				// STHS
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		STHS %s+%d,GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, gpr_or_0(r3), r1 << 1, r2);
 				logmsgf(LOGINSTR, "			0x%08X + %d: 0x%08X\n", r3_reg_or_0, r1 << 1, GPR[r2]);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
-				procwrite(r3_reg_or_0 + (r1 << 1), GPR[r2], HALFWORD, MEMORY, TAG_PROC);
+				procBusCycle(r3_reg_or_0 + (r1 << 1), GPR[r2], WIDTH_HALFWORD, RW_STORE, 0);
 				break;
 			case 3:
 				// STS
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		STS %s+%d,GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, gpr_or_0(r3), r1 << 2, r2);
 				logmsgf(LOGINSTR, "			0x%08X + %d: 0x%08X\n", r3_reg_or_0, r1 << 2, GPR[r2]);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
-				procwrite(r3_reg_or_0 + (r1 << 2), GPR[r2], WORD, MEMORY, TAG_PROC);
+				procBusCycle(r3_reg_or_0 + (r1 << 2), GPR[r2], WIDTH_WORD, RW_STORE, 0);
 				break;
 			case 4:
 				// LCS
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		LCS GPR%d, %s+%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, gpr_or_0(r3), r1);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
-				GPR[r2] = procread(r3_reg_or_0 + r1, BYTE, MEMORY, TAG_PROC);
+				GPR[r2] = procBusCycle(r3_reg_or_0 + r1, 0, WIDTH_BYTE, RW_LOAD, 0);
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X + %d\n", GPR[r2], r3_reg_or_0, r1);
 				break;
 			case 5:
 				// LHAS
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		LHAS GPR%d, %s+%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, gpr_or_0(r3), r1 << 1);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
-				GPR[r2] = (int16_t)procread(r3_reg_or_0 + (r1 << 1), HALFWORD, MEMORY, TAG_PROC);;
+				GPR[r2] = (int16_t)procBusCycle(r3_reg_or_0 + (r1 << 1), 0, WIDTH_HALFWORD, RW_LOAD, 0);;
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X + %d\n", GPR[r2], r3_reg_or_0, r1 << 1);
 				break;
 			case 6:
@@ -257,7 +288,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// LS
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		LS GPR%d, %s+%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, gpr_or_0(r3), (r1 << 2));
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
-				GPR[r2] = procread(r3_reg_or_0 + (r1 << 2), WORD, MEMORY, TAG_PROC);
+				GPR[r2] = procBusCycle(r3_reg_or_0 + (r1 << 2), 0, WIDTH_WORD, RW_LOAD, 0);
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X + %d\n", GPR[r2], r3_reg_or_0, r1 << 2);
 				break;
 		}
@@ -286,7 +317,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
 				if ( !(SCR.CS & (0x8000 >> r2)) ) {
 					logmsgf(LOGINSTR, " SUB");
-					decode(procread(SCR.IAR, INST, MEMORY, TAG_PROC), DIRECTEXEC);
+					decode(procBusCycle(SCR.IAR, 0, WIDTH_INST, RW_LOAD, 0), DIRECTEXEC);
 					SCR.IAR = instIAR + (sI16 << 1);
 				}
 				break;
@@ -312,7 +343,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
 				GPR[15] = SCR.IAR+4;
 				logmsgf(LOGINSTR, "			GPR15: 0x%08X\n", GPR[15]);
-				decode(procread(SCR.IAR, INST, MEMORY, TAG_PROC), DIRECTEXEC);
+				decode(procBusCycle(SCR.IAR, 0, WIDTH_INST, RW_LOAD, 0), DIRECTEXEC);
 				SCR.IAR = BA;
 				break;
 			case 0x8C:
@@ -337,7 +368,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
 				GPR[r2] = SCR.IAR;
 				logmsgf(LOGINSTR, "			GPR%d: 0x%08X\n", r2, GPR[r2]);
-				decode(procread(SCR.IAR, INST, MEMORY, TAG_PROC), DIRECTEXEC);
+				decode(procBusCycle(SCR.IAR, 0, WIDTH_INST, RW_LOAD, 0), DIRECTEXEC);
 				SCR.IAR = instIAR + (sI16 << 1);
 				break;
 			case 0x8E:
@@ -362,7 +393,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
 				if ( (SCR.CS & (0x8000 >> r2)) ) {
 					logmsgf(LOGINSTR, " SUB");
-					decode(procread(SCR.IAR, INST, MEMORY, TAG_PROC), DIRECTEXEC);
+					decode(procBusCycle(SCR.IAR, 0, WIDTH_INST, RW_LOAD, 0), DIRECTEXEC);
 					SCR.IAR = instIAR + (sI16 << 1);
 				}
 				break;
@@ -751,12 +782,12 @@ void decode (uint32_t inst, uint8_t mode) {
 					return;
 				}
 				if (r2 != 0x0) {logmsgf(LOGPROC, "PROC: Warning SVC Nibble2 should be zero. IAR: 0x%08X\n", SCR.IAR);}
-				procwrite(0x00000190, SCR.IAR, WORD, MEMORY, TAG_PROC);
-				procwrite(0x00000194, SCR.ICS, HALFWORD, MEMORY, TAG_PROC);
-				procwrite(0x00000196, SCR.CS, HALFWORD, MEMORY, TAG_PROC);
-				procwrite(0x0000019E, r3_reg_or_0 + I16, HALFWORD, MEMORY, TAG_PROC);
-				SCR.IAR = procread(0x00000198, WORD, MEMORY, TAG_PROC);
-				SCR.ICS = procread(0x0000019C, HALFWORD, MEMORY, TAG_PROC);
+				procBusCycle(0x00000190, SCR.IAR, WIDTH_WORD, RW_STORE, PIO_REAL);
+				procBusCycle(0x00000194, SCR.ICS, WIDTH_HALFWORD, RW_STORE, PIO_REAL);
+				procBusCycle(0x00000196, SCR.CS, WIDTH_HALFWORD, RW_STORE, PIO_REAL);
+				procBusCycle(0x0000019E, r3_reg_or_0 + I16, WIDTH_HALFWORD, RW_STORE, PIO_REAL);
+				SCR.IAR = procBusCycle(0x00000198, 0, WIDTH_WORD, RW_LOAD, PIO_REAL);
+				SCR.ICS = procBusCycle(0x0000019C, 0, WIDTH_HALFWORD, RW_LOAD, PIO_REAL);
 				logmsgf(LOGINSTR, "			Regs: IAR: 0x%08X ICS: 0x%08X\n", SCR.IAR, SCR.ICS);
 				break;
 			case 0xC1:
@@ -836,7 +867,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X		LM GPR%d, %s+%d\n", SCR.IAR, inst, r2, gpr_or_0(r3), sI16);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
 				for (int i = r2; i < 16; i++) {
-					GPR[i] = procread(r3_reg_or_0 + sI16 + ((i - r2) << 2), WORD, MEMORY, TAG_PROC);
+					GPR[i] = procBusCycle(r3_reg_or_0 + sI16 + ((i - r2) << 2), 0, WIDTH_WORD, RW_LOAD, 0);
 					logmsgf(LOGINSTR, "			0x%08X, 0x%08X + 0x%08X + %d\n", GPR[i], r3_reg_or_0, I16, ((i - r2) << 2));
 				}
 				break;
@@ -844,7 +875,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// LHA
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X		LHA GPR%d, %s+%d\n", SCR.IAR, inst, r2, gpr_or_0(r3), sI16 << 1);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
-				GPR[r2] = (int16_t)procread(r3_reg_or_0 + (sI16 << 1), HALFWORD, MEMORY, TAG_PROC);
+				GPR[r2] = (int16_t)procBusCycle(r3_reg_or_0 + (sI16 << 1), 0, WIDTH_HALFWORD, RW_LOAD, 0);
 				logmsgf(LOGINSTR, "			0x%08X, 0x%08X\n", GPR[r2], r3_reg_or_0 + (sI16 << 1));
 				break;
 			case 0xCB:
@@ -856,7 +887,7 @@ void decode (uint32_t inst, uint8_t mode) {
 					//SCR.MCSPCS |= 0x00000082;
 					progcheck(0);
 				}
-				GPR[r2] = procread(addr, WORD, PIO, TAG_PROC);
+				GPR[r2] = procBusCycle(addr, 0, WIDTH_WORD, RW_LOAD, PIO_PIO);
 				logmsgf(LOGINSTR, "			0x%08X, 0x%08X + %d\n", GPR[r2], r3_reg_or_0, I16);
 				break;
 			case 0xCC:
@@ -892,21 +923,21 @@ void decode (uint32_t inst, uint8_t mode) {
 				// L
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	L GPR%d, %s+%d\n", SCR.IAR, inst, r2, gpr_or_0(r3), sI16);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
-				GPR[r2] = procread(r3_reg_or_0 + sI16, WORD, MEMORY, TAG_PROC);
+				GPR[r2] = procBusCycle(r3_reg_or_0 + sI16, 0, WIDTH_WORD, RW_LOAD, 0);
 				logmsgf(LOGINSTR, "			0x%08X, 0x%08X + %d\n", GPR[r2], r3_reg_or_0,  sI16);
 				break;
 			case 0xCE:
 				// LC
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	LC GPR%d, %s+%d\n", SCR.IAR, inst, r2, gpr_or_0(r3), sI16);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
-				GPR[r2] = procread(r3_reg_or_0 + sI16, BYTE, MEMORY, TAG_PROC);
+				GPR[r2] = procBusCycle(r3_reg_or_0 + sI16, 0, WIDTH_BYTE, RW_LOAD, 0);
 				logmsgf(LOGINSTR, "			0x%08X, 0x%08X + %d\n", GPR[r2], r3_reg_or_0,  sI16);
 				break;
 			case 0xCF:
 				// TSH
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		TSH GPR%d, %s+%d\n", SCR.IAR, inst, r2, gpr_or_0(r3), sI16 << 1);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
-				GPR[r2] = proctsh(r3_reg_or_0 + sI16, HALFWORD, TAG_PROC);
+				GPR[r2] = procBusCycle(r3_reg_or_0 + sI16, 0, WIDTH_TESTSET, RW_STORE, 0);
 				logmsgf(LOGINSTR, "			0x%08X, 0x%08X + %d\n", GPR[r2], r3_reg_or_0,  sI16);
 				logmsgf(LOGINSTR, "			SET: 0x%08X + %d, 0xFF\n", r3_reg_or_0,  sI16-1);
 				break;
@@ -919,9 +950,9 @@ void decode (uint32_t inst, uint8_t mode) {
 					return;
 				}
 				if (r2 & 0xC) {logmsgf(LOGPROC, "PROC: Warning LPS Nibble2 upper bits should be zero. IAR: 0x%08X\n", SCR.IAR);}
-				SCR.IAR = procread(r3_reg_or_0 + sI16, WORD, MEMORY, TAG_PROC);
-				SCR.ICS = procread(r3_reg_or_0 + sI16 + 4, HALFWORD, MEMORY, TAG_PROC);
-				SCR.CS = procread(r3_reg_or_0 + sI16 + 6, HALFWORD, MEMORY, TAG_PROC);
+				SCR.IAR = procBusCycle(r3_reg_or_0 + sI16, 0, WIDTH_WORD, RW_LOAD, 0);
+				SCR.ICS = procBusCycle(r3_reg_or_0 + sI16 + 4, 0, WIDTH_HALFWORD, RW_LOAD, 0);
+				SCR.CS = procBusCycle(r3_reg_or_0 + sI16 + 6, 0, WIDTH_HALFWORD, RW_LOAD, 0);
 				if (currentIntLevel & (0x00008000 >> 7)) {
 					currentIntLevel &= ~(0x00008000 >> 7);
 					SCR.MCSPCS = SCR.MCSPCS & 0x0000FF00;
@@ -935,7 +966,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// If bit 11, interrupts remain pending until target instr executed
 				if (inst & 0x00100000) {
 					// Execute the next Instr immediately to avoid taking an interrupt inbetween.
-					decode(procread(SCR.IAR, INST, MEMORY, TAG_PROC), NORMEXEC);
+					decode(procBusCycle(SCR.IAR, 0, WIDTH_INST, RW_LOAD, 0), NORMEXEC);
 				}
 				break;
 			case 0xD1:
@@ -1020,14 +1051,14 @@ void decode (uint32_t inst, uint8_t mode) {
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
 				for (int i = r2; i < 16; i++) {
 					logmsgf(LOGINSTR, "			0x%08X + 0x%08X + %d, 0x%08X\n", r3_reg_or_0, I16, ((i - r2) << 2), GPR[i]);
-					procwrite(r3_reg_or_0 + sI16 + ((i - r2) << 2), GPR[i], WORD, MEMORY, TAG_PROC);
+					procBusCycle(r3_reg_or_0 + sI16 + ((i - r2) << 2), GPR[i], WIDTH_WORD, RW_STORE, 0);
 				}
 				break;
 			case 0xDA:
 				// LH
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	LH GPR%d, %s+%d\n", SCR.IAR, inst, r2, gpr_or_0(r3), sI16);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
-				GPR[r2] = procread(r3_reg_or_0 + sI16, HALFWORD, MEMORY, TAG_PROC);
+				GPR[r2] = procBusCycle(r3_reg_or_0 + sI16, 0, WIDTH_HALFWORD, RW_LOAD, 0);
 				logmsgf(LOGINSTR, "			0x%08X, 0x%08X + 0x%08X\n", GPR[r2], r3_reg_or_0, sI16);
 				break;
 			case 0xDB:
@@ -1040,28 +1071,28 @@ void decode (uint32_t inst, uint8_t mode) {
 					//SCR.MCSPCS |= 0x00000082;
 					progcheck(0);
 				}
-				procwrite(addr, GPR[r2], WORD, PIO, TAG_PROC);
+				procBusCycle(addr, GPR[r2], WIDTH_WORD, RW_STORE, PIO_PIO);
 				break;
 			case 0xDC:
 				// STH
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	STH %s+%d,GPR%d\n", SCR.IAR, inst, gpr_or_0(r3), sI16, r2);
 				logmsgf(LOGINSTR, "			0x%08X + %d, 0x%08X\n", r3_reg_or_0, sI16, GPR[r2]);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
-				procwrite(r3_reg_or_0 + sI16, GPR[r2], HALFWORD, MEMORY, TAG_PROC);
+				procBusCycle(r3_reg_or_0 + sI16, GPR[r2], WIDTH_HALFWORD, RW_STORE, 0);
 				break;
 			case 0xDD:
 				// ST
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	ST %s+%d,GPR%d\n", SCR.IAR, inst, gpr_or_0(r3), sI16, r2);
 				logmsgf(LOGINSTR, "			0x%08X + %d, 0x%08X\n", r3_reg_or_0, sI16, GPR[r2]);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
-				procwrite(r3_reg_or_0 + sI16, GPR[r2], WORD, MEMORY, TAG_PROC);
+				procBusCycle(r3_reg_or_0 + sI16, GPR[r2], WIDTH_WORD, RW_STORE, 0);
 				break;
 			case 0xDE:
 				// STC
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	STC %s+%d,GPR%d\n", SCR.IAR, inst, gpr_or_0(r3), sI16, r2);
 				logmsgf(LOGINSTR, "			0x%08X + %d, 0x%08X\n", r3_reg_or_0, sI16, GPR[r2]);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
-				procwrite(r3_reg_or_0 + sI16, GPR[r2], BYTE, MEMORY, TAG_PROC);
+				procBusCycle(r3_reg_or_0 + sI16, GPR[r2], WIDTH_BYTE, RW_STORE, 0);
 				break;
 			case 0xE0:
 				// ABS
@@ -1173,7 +1204,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
 				if ( !(SCR.CS & (0x8000 >> r2)) ) {
 					logmsgf(LOGINSTR, " SUB");
-					decode(procread(SCR.IAR, INST, MEMORY, TAG_PROC), DIRECTEXEC);
+					decode(procBusCycle(SCR.IAR, 0, WIDTH_INST, RW_LOAD, 0), DIRECTEXEC);
 					SCR.IAR = GPR[r3] & 0xFFFFFFFE;
 				}
 				break;
@@ -1181,7 +1212,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// LHS
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		LHS GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
-				GPR[r2] = procread(GPR[r3], HALFWORD, MEMORY, TAG_PROC);
+				GPR[r2] = procBusCycle(GPR[r3], 0, WIDTH_HALFWORD, RW_LOAD, 0);
 				logmsgf(LOGINSTR, "			0x%08X, 0x%08X\n", GPR[r2], GPR[r3]);
 				break;
 			case 0xEC:
@@ -1206,7 +1237,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
 				GPR[r2] = SCR.IAR;
 				logmsgf(LOGINSTR, "			GPR%d: 0x%08X\n SUB", r2, GPR[r2]);
-				decode(procread(SCR.IAR, INST, MEMORY, TAG_PROC), DIRECTEXEC);
+				decode(procBusCycle(SCR.IAR, 0, WIDTH_INST, RW_LOAD, 0), DIRECTEXEC);
 				SCR.IAR = GPR[r3] & 0xFFFFFFFE;
 				break;
 			case 0xEE:
@@ -1231,7 +1262,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
 				if ( (SCR.CS & (0x8000 >> r2)) ) {
 					logmsgf(LOGINSTR, " SUB");
-					decode(procread(SCR.IAR, INST, MEMORY, TAG_PROC), DIRECTEXEC);
+					decode(procBusCycle(SCR.IAR, 0, WIDTH_INST, RW_LOAD, 0), DIRECTEXEC);
 					SCR.IAR = GPR[r3] & 0xFFFFFFFE;
 				}
 				break;
