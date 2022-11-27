@@ -176,7 +176,7 @@ void decode (uint32_t inst, uint8_t mode) {
 	// From simple sign extention to int8_t for addr calculation shifted left one bit
 	int32_t JI = inst & 0x00800000 ? (((inst & 0x007F0000) >> 15) | 0xFFFFFF00) : (inst & 0x007F0000) >> 15;
 	// From simple sign extention to int16_t for addr calculation
-	int16_t sI16 = inst & 0x00008000 ? inst | 0xFFFF0000 : inst & 0x00007FFF;
+	int32_t sI16 = inst & 0x00008000 ? inst | 0xFFFF0000 : inst & 0x00007FFF;
 
 	uint32_t addr;
 	uint32_t prevVal;
@@ -667,7 +667,7 @@ void decode (uint32_t inst, uint8_t mode) {
 			case 0xB6:
 				// D
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
-				logmsgf(LOGPROC, "PROC: Error instruction to be implemented. IAR: 0x%08X\n", SCR.IAR);
+				logmsgf(LOGPROC, "PROC: Error D instruction to be implemented. IAR: 0x%08X\n", SCR.IAR);
 				//logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		D GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xB8:
@@ -718,13 +718,21 @@ void decode (uint32_t inst, uint8_t mode) {
 				break;
 			case 0xBD:
 				// TGTE
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		TGTE GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
+				logmsgf(LOGINSTR, "			0x%08X >= 0x%08X\n", GPR[r2], GPR[r3]);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
-				logmsgf(LOGPROC, "PROC: Error instruction to be implemented. IAR: 0x%08X\n", SCR.IAR);
+				if (GPR[r2] >= GPR[r3]) {
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_ProgTrap);
+				}
 				break;
 			case 0xBE:
 				// TLT
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		TLT GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
+				logmsgf(LOGINSTR, "			0x%08X < 0x%08X\n", GPR[r2], GPR[r3]);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
-				logmsgf(LOGPROC, "PROC: Error instruction to be implemented. IAR: 0x%08X\n", SCR.IAR);
+				if (GPR[r2] < GPR[r3]) {
+					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_ProgTrap);
+				}
 				break;
 			case 0xBF:
 				// MTTB
@@ -853,8 +861,32 @@ void decode (uint32_t inst, uint8_t mode) {
 				break;
 			case 0xCC:
 				// TI
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	TI GPR%d, 0x%08X\n", SCR.IAR, inst, r3, sI16);
+				logmsgf(LOGINSTR, "			0x%08X, 0x%08X\n", GPR[r2], sI16);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
-				logmsgf(LOGPROC, "PROC: Error instruction to be implemented. IAR: 0x%08X\n", SCR.IAR);
+				if (r2 & 0x8) {logmsgf(LOGPROC, "PROC: Warning TI bit8 should be zero. IAR: 0x%08X\n", SCR.IAR);}
+				switch (r2 & 0x7) {
+					case 0x4:
+						if (GPR[r3] < (uint32_t)sI16) {
+							progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_ProgTrap);
+						}
+						break;
+					case 0x2:
+						if (GPR[r3] == (uint32_t)sI16) {
+							progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_ProgTrap);
+						}
+						break;
+					case 0x1:
+						if (GPR[r3] > (uint32_t)sI16) {
+							progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_ProgTrap);
+						}
+						break;
+					default:
+						// Invalid
+						// progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
+						break;
+				}
+				
 				break;
 			case 0xCD:
 				// L
@@ -1106,7 +1138,7 @@ void decode (uint32_t inst, uint8_t mode) {
 			case 0xE6:
 				// M
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
-				logmsgf(LOGPROC, "PROC: Error instruction to be implemented. IAR: 0x%08X\n", SCR.IAR);
+				logmsgf(LOGPROC, "PROC: Error M instruction to be implemented. IAR: 0x%08X\n", SCR.IAR);
 				//logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		M GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				break;
 			case 0xE7:

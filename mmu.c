@@ -317,6 +317,8 @@ void realwrite (uint32_t addr, uint32_t data, uint8_t bytes) {
 		}
 	} else if ((addr >= IOChanIOMapStartAddr) && (addr <= IOChanIOMapEndAddr)) {
 		iowrite(addr, data, bytes);
+	} else if ((addr >= IOChanMemMapStartAddr) && (addr <= IOChanMemMapEndAddr)) {
+		logmsgf(LOGMMU, "MMU: IO Memory write 0x%08X\n", addr);
 	} else {
 		logmsgf(LOGMMU, "MMU: Error Memory write outside valid ranges 0x%08X: 0x%08X\n", addr, data);
 	}
@@ -376,6 +378,9 @@ uint32_t realread (uint32_t addr, uint8_t bytes) {
 		}
 	} else if ((addr >= IOChanIOMapStartAddr) && (addr <= IOChanIOMapEndAddr)) {
 		data = ioread(addr, bytes);
+	} else if ((addr >= IOChanMemMapStartAddr) && (addr <= IOChanMemMapEndAddr)) {
+		logmsgf(LOGMMU, "MMU: IO Memory read 0x%08X\n", addr);
+		data = 0;
 	} else {
 		logmsgf(LOGMMU, "MMU: Error Memory read outside valid ranges 0x%08X\n", addr);
 		data = 0;

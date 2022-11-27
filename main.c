@@ -31,12 +31,12 @@ int main (void) {
 	mmuinit(memptr, &SCRptr->ICS);
 	GPRptr = procinit();
 
-	romp_pointers(GPRptr, SCRptr);
+	romp_pointers(GPRptr, SCRptr, memptr);
 	int close = 0;
 
 	while(!close) {
 		// Enable logging after certain address to save log file size...
-		if (SCRptr->IAR == 0x00800970) {
+		if (SCRptr->IAR == 0x008005A6) {
 			enlogtypes(LOGALL);
 		}
 		if ((SDL_GetTicks64() - ticks) >= 16) {
