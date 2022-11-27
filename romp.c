@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "defs.h"
 #include "romp.h"
 #include "mmu.h"
 #include "logfac.h"
@@ -51,8 +50,8 @@ uint32_t procBusCycle(uint32_t addr, uint32_t data, uint8_t width, uint8_t rw, u
 	return procBusPtr->data;
 }
 
-uint32_t* procinit (struct procBusStruct* procBus) {
-	procBusPtr = procBus;
+uint32_t* procinit (struct procBusStruct* procBusPointer) {
+	procBusPtr = procBusPointer;
 	wait = 0;
 	for (uint8_t i=0; i < 16; i++) {
 		GPR[i] = 0x00000000;
@@ -117,7 +116,7 @@ void ov_flag_check (uint64_t val) {
 
 // TODO: Address translation is supposed to be disabled for the following PROG_STATUS stores and loads
 void checkInterrupt(void) {
-	uint8_t intLevel = ((SCR.IRB & 0x0000FE00) >> 9 || procBusPtr->intrpt);
+	uint8_t intLevel = ((SCR.IRB & 0x0000FE00) >> 9 | procBusPtr->intrpt);
 	
 	if (intLevel & 0x40) {
 		intLevel = 0;
@@ -147,8 +146,8 @@ void checkInterrupt(void) {
 		procBusCycle(psOffset+4, SCR.ICS, WIDTH_HALFWORD, RW_STORE, PIO_REAL);
 		procBusCycle(psOffset+6, SCR.CS, WIDTH_HALFWORD, RW_STORE, PIO_REAL);
 		SCR.IAR = procBusCycle(psOffset+8, 0, WIDTH_WORD, RW_LOAD, PIO_REAL);
-		SCR.ICS = procBusCycle(psOffset+12, 0, WIDTH_WORD, RW_LOAD, PIO_REAL);
-		SCR.CS = procBusCycle(psOffset+14, 0, WIDTH_WORD, RW_LOAD, PIO_REAL);
+		SCR.ICS = procBusCycle(psOffset+12, 0, WIDTH_HALFWORD, RW_LOAD, PIO_REAL);
+		SCR.CS = procBusCycle(psOffset+14, 0, WIDTH_HALFWORD, RW_LOAD, PIO_REAL);
 		logmsgf(LOGPROC, "			Regs: IAR: 0x%08X ICS: 0x%08X CS: 0x%08X\n", SCR.IAR, SCR.ICS, SCR.CS);
 	}
 }
@@ -161,7 +160,7 @@ void progcheck (uint32_t PCSBits) {
 	procBusCycle(PROG_STATUS_PC+4, SCR.ICS, WIDTH_HALFWORD, RW_STORE, PIO_REAL);
 	procBusCycle(PROG_STATUS_PC+6, SCR.CS, WIDTH_HALFWORD, RW_STORE, PIO_REAL);
 	SCR.IAR = procBusCycle(PROG_STATUS_PC+8, 0, WIDTH_WORD, RW_LOAD, PIO_REAL);
-	SCR.ICS = procBusCycle(PROG_STATUS_PC+12, 0, WIDTH_WORD, RW_LOAD, PIO_REAL);
+	SCR.ICS = procBusCycle(PROG_STATUS_PC+12, 0, WIDTH_HALFWORD, RW_LOAD, PIO_REAL);
 	logmsgf(LOGPROC, "			Regs: IAR: 0x%08X ICS: 0x%08X CS: 0x%08X\n", SCR.IAR, SCR.ICS, SCR.CS);
 	return;
 }
@@ -175,7 +174,7 @@ void machcheck (uint32_t MCSBits) {
 		procBusCycle(PROG_STATUS_MC+4, SCR.ICS, WIDTH_HALFWORD, RW_STORE, PIO_REAL);
 		procBusCycle(PROG_STATUS_MC+6, SCR.CS, WIDTH_HALFWORD, RW_STORE, PIO_REAL);
 		SCR.IAR = procBusCycle(PROG_STATUS_MC+8, 0, WIDTH_WORD, RW_LOAD, PIO_REAL);
-		SCR.ICS = procBusCycle(PROG_STATUS_MC+12, 0, WIDTH_WORD, RW_LOAD, PIO_REAL);
+		SCR.ICS = procBusCycle(PROG_STATUS_MC+12, 0, WIDTH_HALFWORD, RW_LOAD, PIO_REAL);
 		logmsgf(LOGPROC, "			Regs: IAR: 0x%08X ICS: 0x%08X CS: 0x%08X\n", SCR.IAR, SCR.ICS, SCR.CS);
 	} else {
 		// TODO: Checkstop!

@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "defs.h"
 #include "mmu.h"
 #include "logfac.h"
 #include "memory.h"
@@ -39,13 +40,13 @@ void memputw (uint8_t *memptr, uint32_t addr, uint32_t data) {
 
 void memwrite (uint8_t* ptr, uint32_t addr, uint32_t data, uint8_t bytes) {
 	switch (bytes) {
-		case BYTE:
+		case WIDTH_BYTE:
 			ptr[addr] = data;
 			break;
-		case HALFWORD:
+		case WIDTH_HALFWORD:
 			memputhw(ptr, addr & 0xFFFFFFFE, data);
 			break;
-		case WORD:
+		case WIDTH_WORD:
 			memputw(ptr, addr & 0xFFFFFFFC, data);
 			break;
 	}
@@ -54,16 +55,16 @@ void memwrite (uint8_t* ptr, uint32_t addr, uint32_t data, uint8_t bytes) {
 uint32_t memread (uint8_t* ptr, uint32_t addr, uint8_t bytes) {
 	uint32_t data;
 	switch (bytes) {
-		case BYTE:
+		case WIDTH_BYTE:
 			data = ptr[addr];
 			break;
-		case HALFWORD:
+		case WIDTH_HALFWORD:
 			data = memgethw(ptr, addr & 0xFFFFFFFE);
 			break;
-		case WORD:
+		case WIDTH_WORD:
 			data = memgetw(ptr, addr & 0xFFFFFFFC);
 			break;
-		case INST:
+		case WIDTH_INST:
 			data = memgetw(ptr, addr);
 			break;
 	}

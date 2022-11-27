@@ -28,7 +28,7 @@ int halt = 0;
 int main (void) {
 	gui_init();
 	loginit("log.txt");
-	enlogtypes(LOGALL ^ LOGINSTR);
+	//enlogtypes(LOGALL ^ LOGINSTR);
 	memptr = meminit();
 	rominit("bins/79X34xx.BIN");
 	ioinit();
@@ -41,8 +41,8 @@ int main (void) {
 
 	while(!close) {
 		// Enable logging after certain address to save log file size...
-		if (SCRptr->IAR == 0x008005A6) {
-			//enlogtypes(LOGALL);
+		if (SCRptr->IAR == 0x00003712) {
+			enlogtypes(LOGALL);
 		}
 		if ((SDL_GetTicks64() - ticks) >= 16) {
 			ticks = SDL_GetTicks64();

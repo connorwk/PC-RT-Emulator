@@ -268,7 +268,7 @@ void render_Mem_Panel(void) {
 	char string[12];
 	for (int i=0; i < 24; i++) {
 		if (memaddrval > 0x00FFFFE7) {memaddrval = 0x00FFFFE7;}
-		sprintf(string, "0x%08X", memread(memlocptr, (memaddrval + (i*4)), WORD));
+		sprintf(string, "0x%08X", memread(memlocptr, (memaddrval + (i*4)), WIDTH_WORD));
 		generateTextTexture(&textlist[36+i], string, textColor, 0, 0, UPDATETEXT);
 	}
 }

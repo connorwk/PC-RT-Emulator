@@ -2,15 +2,14 @@
 #ifndef _MMU
 #define _MMU
 #include <stdint.h>
+#include "defs.h"
 
 void rominit (const char *file);
 void mmuinit (uint8_t* memptr, struct procBusStruct* procBus);
 void realwrite (uint32_t addr, uint32_t data, uint8_t bytes);
 uint32_t realread (uint32_t addr, uint8_t bytes);
 int invalidAddrCheck (uint32_t addr, uint32_t end_addr, uint8_t bytes);
-void procwrite (uint32_t addr, uint32_t data, uint8_t bytes, uint8_t mode, uint8_t tag);
-uint32_t procread (uint32_t addr, uint8_t bytes, uint8_t mode, uint8_t tag);
-uint32_t proctsh (uint32_t addr, uint8_t bytes, uint8_t tag);
+void mmuCycle (void);
 
 #define MMUCONFIGSIZE 65536
 #define ROMSIZE 65536

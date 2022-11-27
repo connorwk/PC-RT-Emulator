@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "defs.h"
 #include "iocc.h"
 #include "mmu.h"
 #include "logfac.h"
@@ -27,14 +28,14 @@ uint8_t* getMDAPtr (void) {
 
 void ioput(uint8_t* ptr, uint32_t addr, uint32_t data, uint8_t bytes) {
 	switch (bytes) {
-		case BYTE:
+		case WIDTH_BYTE:
 			ptr[addr ^ 0x00000001] = data;
 			break;
-		case HALFWORD:
+		case WIDTH_HALFWORD:
 			ptr[addr & 0xFFFFFFFE] = (data & 0x0000FF00) >> 8;
 			ptr[(addr & 0xFFFFFFFE) + 1] = (data & 0x000000FF);
 			break;
-		case WORD:
+		case WIDTH_WORD:
 			ptr[addr & 0xFFFFFFFC] = (data & 0xFF000000) >> 24;
 			ptr[addr & 0xFFFFFFFC + 1] = (data & 0x00FF0000) >> 16;
 			ptr[addr & 0xFFFFFFFC + 2] = (data & 0x0000FF00) >> 8;
@@ -46,13 +47,13 @@ void ioput(uint8_t* ptr, uint32_t addr, uint32_t data, uint8_t bytes) {
 uint32_t ioget(uint8_t* ptr, uint32_t addr, uint8_t bytes) {
 	uint32_t data;
 	switch (bytes) {
-		case BYTE:
+		case WIDTH_BYTE:
 			data = ptr[addr ^ 0x00000001];
 			break;
-		case HALFWORD:
+		case WIDTH_HALFWORD:
 			data = ptr[addr & 0xFFFFFFFE] << 8 | ptr[(addr & 0xFFFFFFFE) + 1];
 			break;
-		case WORD:
+		case WIDTH_WORD:
 			data = (ptr[addr & 0xFFFFFFFC] << 24) | (ptr[addr & 0xFFFFFFFC + 1] << 16) | (ptr[addr & 0xFFFFFFFC + 2] << 8) | (ptr[(addr & 0xFFFFFFFC) + 3]);
 			break;
 	}

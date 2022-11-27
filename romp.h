@@ -2,6 +2,7 @@
 #ifndef _ROMP
 #define _ROMP
 #include <stdint.h>
+#include "defs.h"
 
 #define NORMEXEC 0
 #define DIRECTEXEC 1
@@ -93,7 +94,7 @@ struct OldPS {
 };
 */
 
-uint32_t* procinit (struct procBusStruct* procBus);
+uint32_t* procinit (struct procBusStruct* procBusPointer);
 union SCRs* getSCRptr (void);
 void checkInterrupt(void);
 void progcheck (uint32_t PCSBits);

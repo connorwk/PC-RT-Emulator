@@ -8,6 +8,7 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "defs.h"
 #include "romp.h"
 #include "mmu.h"
 #include "memory.h"
