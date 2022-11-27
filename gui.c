@@ -297,7 +297,7 @@ int gui_update (void) {
 	generateTextTexture(&textlist[1], string, textColor, 0, 0, UPDATETEXT);
 
 	render_GPRs();
-	render_Mem_Panel();
+	//render_Mem_Panel();
 
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
