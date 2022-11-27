@@ -5,8 +5,11 @@
 #define SYSBRDCNFGSIZE 262143
 
 void ioinit (void);
+uint8_t* getMDAPtr (void);
 void iowrite (uint32_t addr, uint32_t data, uint8_t bytes);
 uint32_t ioread (uint32_t addr, uint8_t bytes);
+void iomemwrite (uint32_t addr, uint32_t data, uint8_t bytes);
+uint32_t iomemread (uint32_t addr, uint8_t bytes);
 
 // CSR Format pg. 5-63
 #define CSR_ExcepReported			0x80000000

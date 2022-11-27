@@ -31,7 +31,7 @@ int main (void) {
 	mmuinit(memptr, &SCRptr->ICS);
 	GPRptr = procinit();
 
-	romp_pointers(GPRptr, SCRptr, memptr);
+	romp_pointers(GPRptr, SCRptr, memptr, getMDAPtr());
 	int close = 0;
 
 	while(!close) {

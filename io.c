@@ -5,9 +5,14 @@
 #include <string.h>
 
 #include "io.h"
+#include "mmu.h"
 #include "logfac.h"
 
 struct SysBrdConfig sysbrdcnfg;
+
+uint8_t mdaVideoMem[4000];
+uint8_t mdaCtrlReg;
+uint8_t mdaStatusReg;
 
 void ioinit (void) {
 	//Any Init required
@@ -16,9 +21,48 @@ void ioinit (void) {
 	sysbrdcnfg.CRRBReg = 0xFF;
 }
 
+uint8_t* getMDAPtr (void) {
+	return &mdaVideoMem[0];
+}
+
+void ioput(uint8_t* ptr, uint32_t addr, uint32_t data, uint8_t bytes) {
+	switch (bytes) {
+		case BYTE:
+			ptr[addr ^ 0x00000001] = data;
+			break;
+		case HALFWORD:
+			ptr[addr & 0xFFFFFFFE] = (data & 0x0000FF00) >> 8;
+			ptr[(addr & 0xFFFFFFFE) + 1] = (data & 0x000000FF);
+			break;
+		case WORD:
+			logmsgf(LOGMMU, "IO: Error trying to write WORD 0x%08X\n", addr);
+			break;
+	}
+}
+
+uint32_t ioget(uint8_t* ptr, uint32_t addr, uint8_t bytes) {
+	uint32_t data;
+	switch (bytes) {
+		case BYTE:
+			data = ptr[addr ^ 0x00000001];
+			break;
+		case HALFWORD:
+			data = ptr[addr & 0xFFFFFFFE] << 8;
+			data |= ptr[(addr & 0xFFFFFFFE) + 1];
+			break;
+		case WORD:
+			logmsgf(LOGMMU, "IO: Error trying to read WORD 0x%08X\n", addr);
+			break;
+	}
+	return data;
+}
+
 void iowrite (uint32_t addr, uint32_t data, uint8_t bytes) {
 	logmsgf(LOGMMU, "IO: IO Write 0x%08X : 0x%08X\n", addr, data);
-	if (addr >= 0xF0008000 && addr <= 0xF0008003) {
+	if (addr == 0xF00003B8) {
+		// Write-only
+		mdaCtrlReg = data;
+	} else if (addr >= 0xF0008000 && addr <= 0xF0008003) {
 		sysbrdcnfg.Z8530[addr & 0x00000003] = data;
 	} else if (addr >= 0xF0008020 && addr <= 0xF0008023) {
 		sysbrdcnfg.CHAExtReg = data;
@@ -64,13 +108,16 @@ void iowrite (uint32_t addr, uint32_t data, uint8_t bytes) {
 	} else if (addr >= 0xF0010800 && addr <= 0xF0010FFF) {
 		sysbrdcnfg.CSR = data | CSR_ReservedBits;
 	} else {
-		logmsgf(LOGMMU, "IO: Error IO write to non-existant IO addr 0x%08X: 0x%08X\n", addr, data);
+		logmsgf(LOGMMU, "IO: Error IO write to non-existant addr 0x%08X: 0x%08X\n", addr, data);
 	}
 }
 
 uint32_t ioread (uint32_t addr, uint8_t bytes) {
-	uint32_t data;
-	if (addr >= 0xF0008000 && addr <= 0xF0008003) {
+	uint32_t data = 0;
+	if (addr == 0xF00003BA) {
+		// Read-only
+		data = mdaStatusReg;
+	} else if (addr >= 0xF0008000 && addr <= 0xF0008003) {
 		data = sysbrdcnfg.Z8530[addr & 0x00000003];
 	} else if (addr >= 0xF0008020 && addr <= 0xF0008023) {
 		data = sysbrdcnfg.CHAExtReg;
@@ -117,8 +164,28 @@ uint32_t ioread (uint32_t addr, uint8_t bytes) {
 	} else if (addr >= 0xF0010800 && addr <= 0xF0010FFF) {
 		data = sysbrdcnfg.CSR;
 	} else {
-		logmsgf(LOGMMU, "IO: Error IO read to non-existant IO addr 0x%08X\n", addr);
+		logmsgf(LOGMMU, "IO: Error IO read to non-existant addr 0x%08X\n", addr);
 	}
 	logmsgf(LOGMMU, "IO: IO Read  0x%08X : 0x%08X\n", addr, data);
+	return data;
+}
+
+void iomemwrite (uint32_t addr, uint32_t data, uint8_t bytes) {
+	logmsgf(LOGMMU, "IO: IO Mem Write 0x%08X : 0x%08X\n", addr, data);
+	if (addr >= 0x0B0000 && addr <= 0x0B0F9F) {
+		ioput(mdaVideoMem, addr & 0x000FFF, data, bytes);
+	} else {
+		logmsgf(LOGMMU, "IO: Error IO Mem write to non-existant addr 0x%08X: 0x%08X\n", addr, data);
+	}
+}
+
+uint32_t iomemread (uint32_t addr, uint8_t bytes) {
+	uint32_t data = 0;
+	if (addr >= 0x0B0000 && addr <= 0x0B0F9F) {
+		data = ioget(mdaVideoMem, addr & 0x000FFF, bytes);
+	} else {
+		logmsgf(LOGMMU, "IO: Error IO Mem read to non-existant addr 0x%08X\n", addr);
+	}
+	logmsgf(LOGMMU, "IO: IO Mem Read  0x%08X : 0x%08X\n", addr, data);
 	return data;
 }
