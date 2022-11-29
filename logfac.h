@@ -8,6 +8,7 @@
 #define LOGMEM		0x00000004
 #define LOGMMU		0x00000008
 #define LOGIO			0x00000010
+#define LOG8259		0x00000020
 
 void loginit (const char *file);
 void logend (void);

@@ -13,7 +13,8 @@ struct procBusStruct {
 	uint8_t tag;		// Source of access TAG_PROC or TAG_IO (TAG_OVERRIDE provides special functionality for debug)
 	uint8_t intrpt;	// Interrupt lines 0-4
 	uint8_t flags;	// Exception, Trap
-} procBus;
+	uint8_t priv;		// Privileged State
+};
 
 // All defines for Proccessor Bus
 #define WIDTH_BYTE			0
@@ -33,12 +34,32 @@ struct procBusStruct {
 #define TAG_IO				1
 #define TAG_OVERRIDE	2
 
-#define INTRPT_0	0x40
-#define INTRPT_1	0x20
-#define INTRPT_2	0x10
-#define INTRPT_3	0x08
-#define INTRPT_4	0x04
+// pg 1-37
+#define INTRPT_0_SysAttnKeyboard	0x80
+#define INTRPT_1_RealTimeClock		0x40
+#define INTRPT_2_IOCCErrors				0x20
+#define INTRPT_2_MMUProgCheck			0x20
+#define INTRPT_3_IOChan						0x10
+#define INTRPT_4_IOChan						0x08
 
 #define FLAGS_Trap			0x01
 #define FLAGS_Exception 0x02 
+
+#define PRIV_Privileged	0
+#define PRIV_UnPrivileged 1
+
+// ISA Bus
+struct isaBusStruct {
+	uint32_t addr;	// Address (24-Bit max)
+	uint32_t data;	// Data (8 or 16 Bit)
+	uint8_t width;	// 1, 2, 4 bytes or a test and set (instruction fetch mode snuck in here too)
+	uint8_t rw;			// 1 if a STORE operation
+	uint8_t pio;		// PIO access for I/O Registers (not to be confused with the register addresses for I/O cards)
+	uint8_t tag;		// Source of access TAG_PROC or TAG_IO (TAG_OVERRIDE provides special functionality for debug)
+	uint8_t intrpt;	// Interrupt lines 0-4
+	uint8_t flags;	// Exception, Trap
+	uint8_t priv;		// Privileged State
+};
+
+
 #endif

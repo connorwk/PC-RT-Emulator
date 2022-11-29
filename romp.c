@@ -15,12 +15,25 @@ struct procBusStruct* procBusPtr;
 uint32_t wait;
 uint32_t currentIntLevel;
 
+uint32_t instCounter[256];
+
+void printInstCounter(void) {
+	for (int i=0; i < 256; i++) {
+		if (instCounter[i]) {
+			logmsgf(LOGPROC, "PROC: Instruction 0x%02X run %d times\n", i, instCounter[i]);
+		}
+	}
+}
+
 uint32_t procBusCycle(uint32_t addr, uint32_t data, uint8_t width, uint8_t rw, uint8_t pio_override) {
 	procBusPtr->addr = addr;
 	procBusPtr->data = data;
 	procBusPtr->width = width;
 	procBusPtr->rw = rw;
 	procBusPtr->tag = TAG_PROC;
+	procBusPtr->priv = (SCR.ICS & ICS_MASK_UnprivState) >> 10;
+	procBusPtr->intrpt = 0;
+	procBusPtr->flags = 0;
 	
 	if (SCR.ICS & ICS_MASK_TranslateMode) {
 		procBusPtr->pio = PIO_TRANS;
@@ -34,19 +47,6 @@ uint32_t procBusCycle(uint32_t addr, uint32_t data, uint8_t width, uint8_t rw, u
 
 	mmuCycle();
 
-	if (procBusPtr->flags & FLAGS_Exception) {
-		if (width == WIDTH_INST) {
-			progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_InstAddrExcp);
-		} else if (SCR.ICS & ICS_MASK_TranslateMode) {
-			progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_DataAddrExcp);
-		} else {
-			progcheck(PCS_MASK_PCUnknownOrig | PCS_MASK_DataAddrExcp);
-		}
-	}
-	if (procBusPtr->flags & FLAGS_Trap) {
-		machcheck(MCS_MASK_IOTrap);
-	}
-
 	return procBusPtr->data;
 }
 
@@ -59,6 +59,12 @@ uint32_t* procinit (struct procBusStruct* procBusPointer) {
 	}
 	// Initial IAR from 000000? pg. 11-140
 	SCR.IAR = procBusCycle(SCR.IAR, 0, WIDTH_WORD, RW_LOAD, 0);
+
+	// Clear instruction counter totals
+	for (int i=0; i < 256; i++) {
+		instCounter[i] = 0;
+	}
+
 	return &GPR[0];
 }
 
@@ -114,30 +120,46 @@ void ov_flag_check (uint64_t val) {
 	}
 }
 
-// TODO: Address translation is supposed to be disabled for the following PROG_STATUS stores and loads
 void checkInterrupt(void) {
-	uint8_t intLevel = ((SCR.IRB & 0x0000FE00) >> 9 | procBusPtr->intrpt);
+	uint8_t localFlags = procBusPtr->flags;
+	procBusPtr->flags = 0;
+	if (localFlags & FLAGS_Exception) {
+		if (procBusPtr->width == WIDTH_INST) {
+			progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_InstAddrExcp);
+		} else if (SCR.ICS & ICS_MASK_TranslateMode) {
+			progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_DataAddrExcp);
+		} else {
+			progcheck(PCS_MASK_PCUnknownOrig | PCS_MASK_DataAddrExcp);
+		}
+	}
+	if (localFlags & FLAGS_Trap) {
+		machcheck(MCS_MASK_IOTrap);
+	}
+
+	uint32_t intLevel = (SCR.IRB & 0x0000FE00);
+	if (!(SCR.ICS & ICS_MASK_IntMask)) {
+		intLevel |= (procBusPtr->intrpt << 8);
+	}
 	
-	if (intLevel & 0x40) {
+	if (intLevel & 0x8000) {
 		intLevel = 0;
-	} else if (intLevel & 0x20) {
+	} else if (intLevel & 0x4000) {
 		intLevel = 1;
-	} else if (intLevel & 0x10) {
+	} else if (intLevel & 0x2000) {
 		intLevel = 2;
-	} else if (intLevel & 0x08) {
+	} else if (intLevel & 0x1000) {
 		intLevel = 3;
-	} else if (intLevel & 0x04) {
+	} else if (intLevel & 0x0800) {
 		intLevel = 4;
-	} else if (intLevel & 0x02) {
+	} else if (intLevel & 0x0400) {
 		intLevel = 5;
-	} else if (intLevel & 0x01) {
+	} else if (intLevel & 0x0200) {
 		intLevel = 6;
 	} else {
 		intLevel = 255;
 	}
 
 	if ((intLevel < (SCR.ICS & ICS_MASK_ProcPriority)) && !(SCR.ICS & ICS_MASK_IntMask)) {
-		//currentIntLevel = (SCR.IRB & 0x0000FE00);
 		logmsgf(LOGPROC, "PROC: Interrupt hit at level %d below Proc Priority %d.\n", intLevel, SCR.ICS & ICS_MASK_ProcPriority);
 		uint32_t psOffset = intLevel;
 		SCR.IRB |= 0x00008000 >> intLevel;
@@ -212,6 +234,9 @@ void decode (uint32_t inst, uint8_t mode) {
 	uint32_t prevVal;
 	uint32_t instIAR = SCR.IAR;
 	int64_t arith_result;
+
+	// Log instruction count, IE how many of each instruction we have executed...
+	instCounter[byte0]++;
 
 	if (nibble0 < 8) {
 		// JI, X, D-Short format Instructions
@@ -558,7 +583,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				break;
 			case 0xA4:
 				// LIS
-				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		LIS GPR%d, %02X\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		LIS GPR%d, 0x%02X\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
 				GPR[r2] = r3;
 				break;
@@ -705,7 +730,11 @@ void decode (uint32_t inst, uint8_t mode) {
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SR GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
 				prevVal = GPR[r2];
-				GPR[r2] = GPR[r2] >> (GPR[r3] & 0x0000003F);
+				if ( (GPR[r3] & 0x0000003F) > 31) {
+					GPR[r2] = 0;
+				} else {
+					GPR[r2] = GPR[r2] >> (GPR[r3] & 0x0000003F);
+				}
 				lt_eq_gt_flag_check(GPR[r2]);
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X >> %d\n", GPR[r2], prevVal, (GPR[r3] & 0x0000003F));
 				logmsgf(LOGINSTR, "			Flags: LT:%d EQ:%d GT:%d\n", (SCR.CS & CS_MASK_LT) >> 6, (SCR.CS & CS_MASK_EQ) >> 5, (SCR.CS & CS_MASK_GT) >> 4);
@@ -714,7 +743,11 @@ void decode (uint32_t inst, uint8_t mode) {
 				// SRP
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SRP GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
-				GPR[r2^0x01] = GPR[r2] >> (GPR[r3] & 0x0000003F);
+				if ( (GPR[r3] & 0x0000003F) > 31) {
+					GPR[r2^0x01] = 0;
+				} else {
+					GPR[r2^0x01] = GPR[r2] >> (GPR[r3] & 0x0000003F);
+				}
 				lt_eq_gt_flag_check(GPR[r2^0x01]);
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X >> %d\n", GPR[r2^0x01], GPR[r2], (GPR[r3] & 0x0000003F));
 				logmsgf(LOGINSTR, "			Flags: LT:%d EQ:%d GT:%d\n", (SCR.CS & CS_MASK_LT) >> 6, (SCR.CS & CS_MASK_EQ) >> 5, (SCR.CS & CS_MASK_GT) >> 4);
@@ -724,7 +757,11 @@ void decode (uint32_t inst, uint8_t mode) {
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SL GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
 				prevVal = GPR[r2];
-				GPR[r2] = GPR[r2] << (GPR[r3] & 0x0000003F);
+				if ( (GPR[r3] & 0x0000003F) > 31) {
+					GPR[r2] = 0;
+				} else {
+					GPR[r2] = GPR[r2] << (GPR[r3] & 0x0000003F);
+				}
 				lt_eq_gt_flag_check(GPR[r2]);
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X << %d\n", GPR[r2], prevVal, (GPR[r3] & 0x0000003F));
 				logmsgf(LOGINSTR, "			Flags: LT:%d EQ:%d GT:%d\n", (SCR.CS & CS_MASK_LT) >> 6, (SCR.CS & CS_MASK_EQ) >> 5, (SCR.CS & CS_MASK_GT) >> 4);
@@ -733,7 +770,11 @@ void decode (uint32_t inst, uint8_t mode) {
 				// SLP
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SLP GPR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
-				GPR[r2^0x01] = GPR[r2] << (GPR[r3] & 0x0000003F);
+				if ( (GPR[r3] & 0x0000003F) > 31) {
+					GPR[r2^0x01] = 0;
+				} else {
+					GPR[r2^0x01] = GPR[r2] << (GPR[r3] & 0x0000003F);
+				}
 				lt_eq_gt_flag_check(GPR[r2^0x01]);
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X << %d\n", GPR[r2^0x01], GPR[r2], (GPR[r3] & 0x0000003F));
 				logmsgf(LOGINSTR, "			Flags: LT:%d EQ:%d GT:%d\n", (SCR.CS & CS_MASK_LT) >> 6, (SCR.CS & CS_MASK_EQ) >> 5, (SCR.CS & CS_MASK_GT) >> 4);
@@ -1014,18 +1055,20 @@ void decode (uint32_t inst, uint8_t mode) {
 				// NIUZ
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	NIUZ GPR%d, GPR%d & 0x%04X\n", SCR.IAR, inst, r2, r3, I16);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
+				prevVal = GPR[r3];
 				GPR[r2] = GPR[r3] & (I16 << 16);
 				lt_eq_gt_flag_check(GPR[r2]);
-				logmsgf(LOGINSTR, "			0x%08X = 0x%08X & 0x%08X\n", GPR[r2], GPR[r3], (I16 << 16));
+				logmsgf(LOGINSTR, "			0x%08X = 0x%08X & 0x%08X\n", GPR[r2], prevVal, (I16 << 16));
 				logmsgf(LOGINSTR, "			Flags: LT:%d EQ:%d GT:%d\n", (SCR.CS & CS_MASK_LT) >> 6, (SCR.CS & CS_MASK_EQ) >> 5, (SCR.CS & CS_MASK_GT) >> 4);
 				break;
 			case 0xD6:
 				// NIUO
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	NIUO GPR%d, GPR%d & 0x%04X\n", SCR.IAR, inst, r2, r3, I16);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
+				prevVal = GPR[r3];
 				GPR[r2] = GPR[r3] & ((I16 << 16) | 0x0000FFFF);
 				lt_eq_gt_flag_check(GPR[r2]);
-				logmsgf(LOGINSTR, "			0x%08X = 0x%08X & 0x%08X\n", GPR[r2], GPR[r3], ((I16 << 16) | 0x0000FFFF));
+				logmsgf(LOGINSTR, "			0x%08X = 0x%08X & 0x%08X\n", GPR[r2], prevVal, ((I16 << 16) | 0x0000FFFF));
 				logmsgf(LOGINSTR, "			Flags: LT:%d EQ:%d GT:%d\n", (SCR.CS & CS_MASK_LT) >> 6, (SCR.CS & CS_MASK_EQ) >> 5, (SCR.CS & CS_MASK_GT) >> 4);
 				break;
 			case 0xD7:

@@ -107,14 +107,25 @@ void updateMERandMEAR (uint32_t merBit) {
 		case MERInvMemAddr:
 			iommuregs->MemException |= MERInvMemAddr;
 			// Exception reply for Read and Trans Write
+			if (procBusPtr->rw == RW_LOAD || (procBusPtr->rw == RW_STORE && procBusPtr->pio == PIO_TRANS)) {
+				procBusPtr->flags |= FLAGS_Exception;
+			}
 			// Prog Check Interrupt for non-Trans Write
+			if (procBusPtr->rw == RW_LOAD || (procBusPtr->rw == RW_STORE && procBusPtr->pio == PIO_REAL)) {
+				procBusPtr->intrpt |= INTRPT_2_MMUProgCheck;
+			}
 			loadMEAR();
 			break;
 		case MERInvIOAddr:
 			iommuregs->MemException |= MERInvIOAddr;
-			// if !RASDiagMode
+			if (!(iommuregs->TranslationCtrl & TRANSCTRLEnblRasDiag) && procBusPtr->rw == RW_LOAD) {
 				// Exception reply for I/O Read
+				procBusPtr->flags |= FLAGS_Exception;
+			}
 			// Prog Check Interrupt for I/O Write
+			if (procBusPtr->rw == RW_STORE) {
+				procBusPtr->intrpt |= INTRPT_2_MMUProgCheck;
+			}
 			loadMEAR();
 			break;
 		case MERUnCorrECC:
@@ -128,9 +139,9 @@ void updateMERandMEAR (uint32_t merBit) {
 			if (!(iommuregs->TranslationCtrl & TRANSCTRLEnblRasDiag)) {
 				// Exception reply for Read or Translated Write
 				if (procBusPtr->rw == RW_LOAD || (procBusPtr->rw == RW_STORE && procBusPtr->pio == PIO_TRANS)) {
-					progcheck(0);
+					procBusPtr->flags |= FLAGS_Exception;
 				}
-				machcheck(0);
+				procBusPtr->flags |= FLAGS_Trap;
 			}
 			break;
 		case MERCorrECC:
@@ -143,7 +154,7 @@ void updateMERandMEAR (uint32_t merBit) {
 					RMDRlocked = 1;
 				}
 				if ((iommuregs->TranslationCtrl & TRANSCTRLIntOnCorrECCErr) && !(iommuregs->TranslationCtrl & TRANSCTRLEnblRasDiag)) {
-					machcheck(0);
+					procBusPtr->flags |= FLAGS_Trap;
 				}
 			}
 			break;
@@ -160,9 +171,10 @@ void updateMERandMEAR (uint32_t merBit) {
 			break;
 		case MERTLBSpec:
 			iommuregs->MemException |= MERTLBSpec;
-			// if !RASDiagMode
-				// Exception reply
-				// Machine Check Interrupt
+			if (!(iommuregs->TranslationCtrl & TRANSCTRLEnblRasDiag)) {
+				procBusPtr->flags |= FLAGS_Exception;
+				procBusPtr->flags |= FLAGS_Trap;
+			}
 			break;
 	}
 }

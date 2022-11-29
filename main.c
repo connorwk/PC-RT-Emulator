@@ -28,10 +28,10 @@ int halt = 0;
 int main (void) {
 	gui_init();
 	loginit("log.txt");
-	//enlogtypes(LOGALL ^ LOGINSTR);
+	enlogtypes(LOG8259 | LOGIO | LOGPROC);
 	memptr = meminit();
 	rominit("bins/79X34xx.BIN");
-	ioinit();
+	ioinit(&procBus);
 	SCRptr = getSCRptr();
 	mmuinit(memptr, &procBus);
 	GPRptr = procinit(&procBus);
@@ -40,8 +40,8 @@ int main (void) {
 	int close = 0;
 
 	while(!close) {
-		// Enable logging after certain address to save log file size...
-		if (SCRptr->IAR == 0x00003712) {
+		// Enable logging after certain address to save log file size... 0x008021B2
+		if (SCRptr->IAR == 0x00003000) {
 			enlogtypes(LOGALL);
 		}
 		if ((SDL_GetTicks64() - ticks) >= 16) {
@@ -51,6 +51,7 @@ int main (void) {
 		if (prevSS != getSingleStep()) {
 			prevSS = getSingleStep();
 			fetch();
+			iocycle();
 		}
 		if (prevCont != getContinueBtn()) {
 			prevCont = getContinueBtn();
@@ -58,16 +59,19 @@ int main (void) {
 				halt = 0;
 				if (SCRptr->IAR == getBreakPoint()) {
 					fetch();
+					iocycle();
 				}
 			} else {
 				halt = 1;
 			}
 		}
-		if (SCRptr->IAR == getBreakPoint()) {
+		if (SCRptr->IAR == getBreakPoint() && !halt) {
 			halt = 1;
+			printInstCounter();
 		}
 		if (!halt) {
 			fetch();
+			iocycle();
 		}
 		//SDL_Delay(1000 / 60);
 	}

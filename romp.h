@@ -93,7 +93,7 @@ struct OldPS {
 	uint16_t OldCS;
 };
 */
-
+void printInstCounter(void);
 uint32_t* procinit (struct procBusStruct* procBusPointer);
 union SCRs* getSCRptr (void);
 void checkInterrupt(void);
