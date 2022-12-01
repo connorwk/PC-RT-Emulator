@@ -9,11 +9,14 @@
 #define LOGMMU		0x00000008
 #define LOGIO			0x00000010
 #define LOG8259		0x00000020
+#define LOGMDA		0x00000040
+#define LOG8237		0x00000080
 
 void loginit (const char *file);
 void logend (void);
 void enlogtypes (unsigned int type);
 int logmsgf (unsigned int type, const char *format, ...);
+void dumpMemory(uint8_t* memory);
 
 // Helper functions for logging to get human readable text.
 

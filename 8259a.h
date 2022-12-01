@@ -2,8 +2,11 @@
 #ifndef _8259A
 #define _8259A
 #include <stdint.h>
+#include "iocc.h"
 
 struct struct8259 {
+	uint32_t ioAddress;
+	uint32_t ioAddressMask;
 	uint8_t reset;
 	uint8_t initreq;
 	uint8_t icw1;
@@ -12,7 +15,9 @@ struct struct8259 {
 	uint8_t icw4;
 	uint8_t ocw1;
 	uint8_t ocw3;
-	uint8_t intlines;
+	uint8_t intLines;
+	uint8_t prevIntLines;
+	uint8_t edgeLatches;
 	uint8_t irr;
 	uint8_t isr;
 	uint8_t intreq;
@@ -33,9 +38,7 @@ struct struct8259 {
 #define OCW3_PollingCmd				0x04
 #define OCW3_ReadRegCmd				0x03
 
-void init8259(struct struct8259* curr8259, struct procBusStruct* procBusPointer);
-void write8259(struct struct8259* curr8259);
-void read8259(struct struct8259* curr8259);
+void init8259 (struct struct8259* curr8259, struct ioBusStruct* ioBusPointer, uint32_t ioaddr, uint32_t ioaddrMask);
 void access8259 (struct struct8259* curr8259);
 void cycle8259 (struct struct8259* curr8259);
 

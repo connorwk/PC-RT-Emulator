@@ -39,6 +39,13 @@ int logmsgf (unsigned int type, const char *format, ...) {
 	return ret;
 }
 
+void dumpMemory(uint8_t* memory) {
+	FILE* fptr;
+	fptr = fopen("memdump.bin", "wb");
+	fwrite(memory, sizeof(uint8_t), 8388608, fptr);
+	fclose(fptr);
+}
+
 const char* getCSname (unsigned int CSnum) {
 	switch (CSnum) {
 		case 0x8:

@@ -6,11 +6,30 @@
 
 void ioinit (struct procBusStruct* procBusPointer);
 void iocycle (void);
+void ioaccess (void);
 uint8_t* getMDAPtr (void);
-void iowrite (uint32_t addr, uint32_t data, uint8_t bytes);
-uint32_t ioread (uint32_t addr, uint8_t bytes);
-void iomemwrite (uint32_t addr, uint32_t data, uint8_t bytes);
-uint32_t iomemread (uint32_t addr, uint8_t bytes);
+// IO Bus
+struct ioBusStruct {
+	uint32_t addr;	// Address for access (24-bit)
+	uint16_t data;	// Data given or received from access (16-bit or 8-bit)
+	uint8_t sbhe;		// 1 or 2 bytes
+	uint8_t rw;			// 1 if a STORE operation
+	uint8_t io;			// IO access (vs memory access)
+	uint8_t cs16;		// If controller received 16-bits
+};
+
+// IO Decode Struct
+/*
+struct ioDecode {
+	uint32_t ioAddress;
+	uint32_t ioAddressMask;
+	uint32_t memAddress;
+	uint32_t memAddressMask;
+};
+*/
+
+#define SBHE_1byte	0
+#define SBHE_2bytes	1
 
 // Channel Control Register Format pg. 5-31
 #define CCR_DMACtrlRegAcc		0x80
@@ -20,22 +39,22 @@ uint32_t iomemread (uint32_t addr, uint8_t bytes);
 #define CCR_RefreshCtrl			0x06
 
 // Component Reset Reg A pg. 5-59
-#define CCRA_IOSlot8	0x80	// 6150 Only
-#define CCRA_IOSlot7	0x40	// 6150 Only
-#define CCRA_IOSlot6	0x20
-#define CCRA_IOSlot5	0x10
-#define CCRA_IOSlot4	0x08
-#define CCRA_IOSlot3	0x04
-#define CCRA_IOSlot2	0x02
-#define CCRA_IOSlot1	0x01
+#define CRRA_IOSlot8	0x80	// 6150 Only
+#define CRRA_IOSlot7	0x40	// 6150 Only
+#define CRRA_IOSlot6	0x20
+#define CRRA_IOSlot5	0x10
+#define CRRA_IOSlot4	0x08
+#define CRRA_IOSlot3	0x04
+#define CRRA_IOSlot2	0x02
+#define CRRA_IOSlot1	0x01
 
 // Component Reset Reg B pg. 5-61
-#define CCRB_Arbitor	0x20
-#define CCRB_DMACtrl2	0x10
-#define CCRB_DMACtrl1	0x08
-#define CCRB_8051			0x04
-#define CCRB_RS232IF	0x02
-#define CCRB_8530			0x01
+#define CRRB_Arbitor	0x20
+#define CRRB_DMACtrl2	0x10
+#define CRRB_DMACtrl1	0x08
+#define CRRB_8051			0x04
+#define CRRB_RS232IF	0x02
+#define CRRB_8530			0x01
 
 // TCW Format pg. 5-29
 #define TCW_VirtAcc					0x8000
@@ -74,11 +93,11 @@ struct SysBrdConfig {
 	uint8_t		CHAExtReg;					//F0008020
 	uint8_t		CHBExtReg;					//F0008040
 	uint8_t		Z8530Intack;				//F0008060
-	uint8_t		IODelayReg;					//F00080E0
+//	uint8_t		IODelayReg;					//F00080E0
 	uint8_t		KeyboardAdpt[8];		//F0008400-F0008407
-	uint8_t		RTC[64];						//F0008800-F000883F
+//	uint8_t		RTC[64];						//F0008800-F000883F
 	uint8_t		P8237_1[16];				//F0008840-F000884F
-	uint8_t		P8237_2[16];				//F0008860-F000886F TODO: Confirm this is correct? Does the doc have a typo?
+	uint8_t		P8237_2[16];				//F0008860-F000887F TODO: Confirm this is correct? Is this for 16-bit stuff or just an error?
 //	uint8_t		P8259_1[2];					//F0008880-F0008881
 //	uint8_t		P8259_2[2];					//F00088A0-F00088A1
 	uint8_t		DMARegDBR;					//F00088C0

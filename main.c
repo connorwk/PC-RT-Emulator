@@ -28,7 +28,7 @@ int halt = 0;
 int main (void) {
 	gui_init();
 	loginit("log.txt");
-	enlogtypes(LOG8259 | LOGIO | LOGPROC);
+	//enlogtypes(LOG8259 | LOGIO | LOGPROC);
 	memptr = meminit();
 	rominit("bins/79X34xx.BIN");
 	ioinit(&procBus);
@@ -40,8 +40,8 @@ int main (void) {
 	int close = 0;
 
 	while(!close) {
-		// Enable logging after certain address to save log file size... 0x008021B2
-		if (SCRptr->IAR == 0x00003000) {
+		// Enable logging after certain address to save log file size...
+		if (SCRptr->IAR == 0x008021B2) {
 			enlogtypes(LOGALL);
 		}
 		if ((SDL_GetTicks64() - ticks) >= 16) {
@@ -63,11 +63,13 @@ int main (void) {
 				}
 			} else {
 				halt = 1;
+				dumpMemory(memptr);
 			}
 		}
 		if (SCRptr->IAR == getBreakPoint() && !halt) {
 			halt = 1;
-			printInstCounter();
+			//printInstCounter();
+			dumpMemory(memptr);
 		}
 		if (!halt) {
 			fetch();

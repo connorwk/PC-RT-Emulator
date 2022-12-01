@@ -977,6 +977,7 @@ void decode (uint32_t inst, uint8_t mode) {
 				// TSH
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		TSH GPR%d, %s+%d\n", SCR.IAR, inst, r2, gpr_or_0(r3), sI16 << 1);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
+				// TSH is treated as a STORE pg. 11-109
 				GPR[r2] = procBusCycle(r3_reg_or_0 + sI16, 0, WIDTH_TESTSET, RW_STORE, 0);
 				logmsgf(LOGINSTR, "			0x%08X, 0x%08X + %d\n", GPR[r2], r3_reg_or_0,  sI16);
 				logmsgf(LOGINSTR, "			SET: 0x%08X + %d, 0xFF\n", r3_reg_or_0,  sI16-1);

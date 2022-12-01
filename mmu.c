@@ -205,10 +205,10 @@ uint8_t genECC(uint32_t data) {
 
 	uint8_t ECC0 = ECCPat10101010[WIDTH_BYTE0] ^ ECCPat10101010[WIDTH_BYTE1] ^ ECCPat11000000[WIDTH_BYTE2] ^ ECCPat11000000[WIDTH_BYTE3];
 	uint8_t ECC1 = ECCPat01010101[WIDTH_BYTE0] ^ ECCPat01010101[WIDTH_BYTE1] ^ ECCPat00110000[WIDTH_BYTE2] ^ ECCPat00110000[WIDTH_BYTE3];
-	uint8_t ECC2 = ECCPat11111111[WIDTH_BYTE0] ^ 0                     ^ ECCPat00001100[WIDTH_BYTE2] ^ ECCPat00001100[WIDTH_BYTE3];
-	uint8_t ECC3 = 0                     ^ ECCPat11111111[WIDTH_BYTE1] ^ ECCPat00000011[WIDTH_BYTE2] ^ ECCPat00000011[WIDTH_BYTE3];
-	uint8_t ECC4 = ECCPat11000000[WIDTH_BYTE0] ^ ECCPat11000000[WIDTH_BYTE1] ^ ECCPat11111111[WIDTH_BYTE2] ^ 0                    ;
-	uint8_t ECC5 = ECCPat00110000[WIDTH_BYTE0] ^ ECCPat00110000[WIDTH_BYTE1] ^ 0                     ^ ECCPat11111111[WIDTH_BYTE3];
+	uint8_t ECC2 = ECCPat11111111[WIDTH_BYTE0] ^ 0                           ^ ECCPat00001100[WIDTH_BYTE2] ^ ECCPat00001100[WIDTH_BYTE3];
+	uint8_t ECC3 = 0                           ^ ECCPat11111111[WIDTH_BYTE1] ^ ECCPat00000011[WIDTH_BYTE2] ^ ECCPat00000011[WIDTH_BYTE3];
+	uint8_t ECC4 = ECCPat11000000[WIDTH_BYTE0] ^ ECCPat11000000[WIDTH_BYTE1] ^ ECCPat11111111[WIDTH_BYTE2] ^ 0                          ;
+	uint8_t ECC5 = ECCPat00110000[WIDTH_BYTE0] ^ ECCPat00110000[WIDTH_BYTE1] ^ 0                           ^ ECCPat11111111[WIDTH_BYTE3];
 	uint8_t ECC6 = ECCPat00001100[WIDTH_BYTE0] ^ ECCPat00001100[WIDTH_BYTE1] ^ ECCPat10101010[WIDTH_BYTE2] ^ ECCPat10101010[WIDTH_BYTE3];
 	uint8_t ECC7 = ECCPat00000011[WIDTH_BYTE0] ^ ECCPat00000011[WIDTH_BYTE1] ^ ECCPat01010101[WIDTH_BYTE2] ^ ECCPat01010101[WIDTH_BYTE3];
 
@@ -325,10 +325,6 @@ void realwrite (uint32_t addr, uint32_t data, uint8_t bytes) {
 			}
 			memeccwrite(memory, addrAdjusted, completeWord, genECC(completeWord));
 		}
-	} else if ((addr >= IOChanIOMapStartAddr) && (addr <= IOChanIOMapEndAddr)) {
-		iowrite(addr, data, bytes);
-	} else if ((addr >= IOChanMemMapStartAddr) && (addr <= IOChanMemMapEndAddr)) {
-		iomemwrite(addr & 0x00FFFFFF, data, bytes);
 	} else {
 		logmsgf(LOGMMU, "MMU: Error Memory write outside valid ranges 0x%08X: 0x%08X\n", addr, data);
 	}
@@ -386,10 +382,6 @@ uint32_t realread (uint32_t addr, uint8_t bytes) {
 					break;
 			}
 		}
-	} else if ((addr >= IOChanIOMapStartAddr) && (addr <= IOChanIOMapEndAddr)) {
-		data = ioread(addr, bytes);
-	} else if ((addr >= IOChanMemMapStartAddr) && (addr <= IOChanMemMapEndAddr)) {
-		data = iomemread(addr & 0x00FFFFFF, bytes);
 	} else {
 		logmsgf(LOGMMU, "MMU: Error Memory read outside valid ranges 0x%08X\n", addr);
 		data = 0;
@@ -634,10 +626,7 @@ uint32_t translatecheck() {
 
 void procwrite (void) {
 	//logmsgf(LOGMMU, "MMU: Write 0x%08X: 0x%08X  %d, %d\n", procBusPtr->addr, procBusPtr->data, procBusPtr->width, mode);
-
-	if (procBusPtr->pio == PIO_TRANS) {
-		realwrite(translatecheck(), procBusPtr->data, procBusPtr->width);
-	} else if (procBusPtr->pio == PIO_REAL) {
+	if (procBusPtr->pio == PIO_REAL) {
 		realwrite(procBusPtr->addr, procBusPtr->data, procBusPtr->width);
 	} else {
 		// PIO
@@ -674,10 +663,7 @@ void procwrite (void) {
 
 void procread (void) {
 	procBusPtr->data = 0;
-
-	if (procBusPtr->pio == PIO_TRANS) {
-			procBusPtr->data = realread(translatecheck(), procBusPtr->width);
-	} else if (procBusPtr->pio == PIO_REAL) {
+	if (procBusPtr->pio == PIO_REAL) {
 			procBusPtr->data = realread(procBusPtr->addr, procBusPtr->width);
 	} else {
 		// PIO
@@ -708,8 +694,6 @@ void procread (void) {
 
 void proctsh (void) {
 	procBusPtr->data = 0;
-
-	// TSH is treated as a STORE pg. 11-109
 	if (procBusPtr->pio == PIO_TRANS) {
 		procBusPtr->data = realread(translatecheck(), WIDTH_HALFWORD);
 		realwrite(translatecheck(), 0xFF, WIDTH_BYTE);
@@ -721,13 +705,25 @@ void proctsh (void) {
 }
 
 void mmuCycle(void) {
-	if (procBusPtr->rw == RW_LOAD) {
-		procread();
-	} else if (procBusPtr->rw == RW_STORE) {
-		if (procBusPtr->width == WIDTH_TESTSET) {
-			proctsh();
+	if (procBusPtr->addr < IOChanIOMapStartAddr) {
+		if (procBusPtr->pio == PIO_TRANS) {
+			procBusPtr->addr = translatecheck();
+			procBusPtr->pio = PIO_REAL;
+			mmuCycle();
 		} else {
-			procwrite();
+			if (procBusPtr->rw == RW_LOAD) {
+				procread();
+			} else if (procBusPtr->rw == RW_STORE) {
+				if (procBusPtr->width == WIDTH_TESTSET) {
+					proctsh();
+				} else {
+					procwrite();
+				}
+			}
 		}
+	} else if ((procBusPtr->addr >= IOChanIOMapStartAddr) && (procBusPtr->addr <= IOChanIOMapEndAddr)) {
+		ioaccess();
+	} else if ((procBusPtr->addr >= IOChanMemMapStartAddr) && (procBusPtr->addr <= IOChanMemMapEndAddr)) {
+		ioaccess();
 	}
 }
