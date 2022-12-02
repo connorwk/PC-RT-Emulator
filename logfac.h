@@ -12,6 +12,7 @@
 #define LOGMDA		0x00000040
 #define LOG8237		0x00000080
 #define LOGKBADPT	0x00000100
+#define LOGRTC		0x00000200
 
 void loginit (const char *file);
 void logend (void);

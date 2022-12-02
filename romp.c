@@ -775,7 +775,8 @@ void decode (uint32_t inst, uint8_t mode) {
 				} else {
 					GPR[r2^0x01] = GPR[r2] << (GPR[r3] & 0x0000003F);
 				}
-				lt_eq_gt_flag_check(GPR[r2^0x01]);
+				//lt_eq_gt_flag_check(GPR[r2^0x01]);
+				algebretic_cmp(GPR[r2^0x01], GPR[r2]);
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X << %d\n", GPR[r2^0x01], GPR[r2], (GPR[r3] & 0x0000003F));
 				logmsgf(LOGINSTR, "			Flags: LT:%d EQ:%d GT:%d\n", (SCR.CS & CS_MASK_LT) >> 6, (SCR.CS & CS_MASK_EQ) >> 5, (SCR.CS & CS_MASK_GT) >> 4);
 				break;

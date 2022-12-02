@@ -28,7 +28,7 @@ int halt = 0;
 int main (void) {
 	gui_init();
 	loginit("log.txt");
-	enlogtypes(LOGIO | LOG8259 | LOGKBADPT);
+	//enlogtypes(LOGALL);
 	memptr = meminit();
 	rominit("bins/79X34xx.BIN");
 	ioinit(&procBus);
@@ -63,12 +63,13 @@ int main (void) {
 				}
 			} else {
 				halt = 1;
+				printInstCounter();
 				dumpMemory(memptr);
 			}
 		}
 		if (SCRptr->IAR == getBreakPoint() && !halt) {
 			halt = 1;
-			//printInstCounter();
+			printInstCounter();
 			dumpMemory(memptr);
 		}
 		if (!halt) {

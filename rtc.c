@@ -19,11 +19,13 @@ void initRTC (struct structrtc* currrtc, struct ioBusStruct* ioBusPointer, uint3
 }
 
 void writeRTCregs (struct structrtc* currrtc) {
+	logmsgf(LOGRTC, "RTC: Write 0x%02X: 0x%02X\n", ioBusPtr->addr & 0x00003F, ioBusPtr->data & 0x00FF);
 	currrtc->_direct[ioBusPtr->addr & 0x00003F] = (ioBusPtr->data & 0x00FF);
 }
 
 void readRTCregs (struct structrtc* currrtc) {
 	ioBusPtr->data = currrtc->_direct[ioBusPtr->addr & 0x00003F];
+	logmsgf(LOGRTC, "RTC: Read 0x%02X: 0x%02X\n", ioBusPtr->addr & 0x00003F, ioBusPtr->data & 0x00FF);
 }
 
 void accessRTC (struct structrtc* currrtc) {

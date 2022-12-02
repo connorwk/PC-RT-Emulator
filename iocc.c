@@ -30,6 +30,7 @@ uint8_t CSRlocked;
 
 void ioinit (struct procBusStruct* procBusPointer) {
 	procBusPtr = procBusPointer;
+	//sysbrdcnfg.CSR = 0x220000FF;
 	initkbadpt(&kbAdapter, &ioBus, 0x008400, 0xFFFFF8);
 	initRTC(&sysRTC, &ioBus, 0x008800, 0xFFFFC0);
 	init8237(&dmaCtrl1, &ioBus, 0x008840, 0xFFFFF0);
@@ -136,7 +137,8 @@ void accessSysBrdRegs (void) {
 			}
 		}
 		if ((ioBus.addr & 0xFFF801) == 0x010000) {
-			if (!ioBus.sbhe) {logmsgf(LOGIO, "IO: Warning TCW access should be a word access.\n");};
+			if (!ioBus.sbhe) {logmsgf(LOGIO, "IO: Warning TCW access should be a halfword access.\n");};
+			ioBus.cs16 = 1;
 			if (ioBus.rw) {
 				logmsgf(LOGIO, "IO: Write TCW %d 0x%04X\n", ((ioBus.addr & 0x0007FE) >> 1), ioBus.data);
 				sysbrdcnfg.TCW[((ioBus.addr & 0x0007FE) >> 1)] = ioBus.data;
@@ -163,8 +165,24 @@ void ioaccess (void) {
 	// Here to clean up logs... Probably not needed when done other than to simulate a delay.
 	if (procBusPtr->addr == 0xF00080E0) {logmsgf(LOGIO, "IO: Delay Reg...\n"); return;}
 
+	// CSR sits on processor bus
+	if (procBusPtr->addr == 0xF0010800) {
+		if (procBusPtr->rw) {
+			logmsgf(LOGIO, "IO: Write CSR (clears)\n");
+			//sysbrdcnfg.CSR = 0x220000FF;
+			sysbrdcnfg.CSR = 0;
+		} else {
+			logmsgf(LOGIO, "IO: Read CSR 0x%08X\n", sysbrdcnfg.CSR);
+			procBusPtr->data = sysbrdcnfg.CSR;
+		}
+		return;
+	}
+
 	if ((procBusPtr->addr & 0xFF000000) == IOChanIOMapStartAddr) {
 		ioBus.io = 1;
+		if (procBusPtr->addr > 0xF0010800) {
+			procBusPtr->flags = FLAGS_Trap;
+		}
 	} else if ((procBusPtr->addr & 0xFF000000) == IOChanMemMapStartAddr) {
 		ioBus.io = 0;
 	}
@@ -174,7 +192,7 @@ void ioaccess (void) {
 	switch(procBusPtr->width) {
 		case WIDTH_BYTE:
 			ioBus.sbhe = SBHE_1byte;
-			if (!ioBus.io) {ioBus.addr = ioBus.addr ^ 0x000001;}
+			//if (!ioBus.io) {ioBus.addr = ioBus.addr ^ 0x000001;}
 			if (ioBus.rw == RW_STORE) {
 				ioBus.data = procBusPtr->data & 0x000000FF;
 				logmsgf(LOGIO, "IO: Byte write      0x%06X : 0x%04X\n", ioBus.addr, ioBus.data);
@@ -189,12 +207,15 @@ void ioaccess (void) {
 			ioBus.sbhe = SBHE_2bytes;
 			ioBus.addr &= 0xFFFFFE;
 			if (ioBus.rw == RW_STORE) {
-				ioBus.data = ((procBusPtr->data & 0x000000FF) << 8) | ((procBusPtr->data & 0x0000FF00) >> 8);
+				//ioBus.data = ((procBusPtr->data & 0x000000FF) << 8) | ((procBusPtr->data & 0x0000FF00) >> 8);
+				ioBus.data = procBusPtr->data;
 				logmsgf(LOGIO, "IO: Halfword write  0x%06X : 0x%04X\n", ioBus.addr, ioBus.data);
 				ioaccessAll();
 				if (!ioBus.cs16) {
-					ioBus.data = (procBusPtr->data & 0x000000FF);
-					if (!ioBus.io) {ioBus.addr++;}
+					//ioBus.data = (procBusPtr->data & 0x000000FF);
+					if (!ioBus.io) {ioBus.data = ((procBusPtr->data & 0x0000FF00) >> 8);}
+					//if (!ioBus.io) {ioBus.addr++;}
+					ioBus.addr++;
 					ioBus.sbhe = SBHE_1byte;
 					logmsgf(LOGIO, "IO:      Byte write 0x%06X : 0x%04X\n", ioBus.addr, ioBus.data);
 					ioaccessAll();
@@ -203,14 +224,18 @@ void ioaccess (void) {
 				ioaccessAll();
 				logmsgf(LOGIO, "IO: Halfword read  0x%06X : 0x%04X\n", ioBus.addr, ioBus.data);
 				if (!ioBus.cs16) {
-					procBusPtr->data = (ioBus.data & 0x00FF) << 8;
+					//procBusPtr->data = (ioBus.data & 0x00FF) << 8;
+					procBusPtr->data = ioBus.data;
 					ioBus.sbhe = SBHE_1byte;
-					if (!ioBus.io) {ioBus.addr++;}
+					//if (!ioBus.io) {ioBus.addr++;}
+					ioBus.addr++;
 					ioaccessAll();
 					logmsgf(LOGIO, "IO:      Byte read 0x%06X : 0x%04X\n", ioBus.addr, ioBus.data);
-					procBusPtr->data |= ioBus.data & 0x00FF;
+					//procBusPtr->data |= ioBus.data & 0x00FF;
+					procBusPtr->data |= (ioBus.data & 0x00FF) << 8;
 				} else {
-					procBusPtr->data = ((ioBus.data & 0x00FF) << 8) | ((ioBus.data & 0xFF00) >> 8);
+					//procBusPtr->data = ((ioBus.data & 0x00FF) << 8) | ((ioBus.data & 0xFF00) >> 8);
+					procBusPtr->data = ioBus.data;
 				}
 			}
 			break;
@@ -218,28 +243,38 @@ void ioaccess (void) {
 			ioBus.sbhe = SBHE_2bytes;
 			ioBus.addr &= 0xFFFFFC;
 			if (ioBus.rw == RW_STORE) {
-				ioBus.data = ((procBusPtr->data & 0x00FF0000) >> 8) | ((procBusPtr->data & 0xFF000000) >> 24);
+				//ioBus.data = ((procBusPtr->data & 0x00FF0000) >> 8) | ((procBusPtr->data & 0xFF000000) >> 24);
+				ioBus.data = procBusPtr->data;
+				if (!ioBus.io) {ioBus.data = ((procBusPtr->data & 0xFFFF0000) >> 16);}
 				logmsgf(LOGIO, "IO: Word write      0x%06X : 0x%04X\n", ioBus.addr, ioBus.data);
 				ioaccessAll();
 				if (ioBus.cs16) {
-					if (!ioBus.io) {ioBus.addr += 2;}
-					ioBus.data = ((procBusPtr->data & 0x000000FF) << 8) | ((procBusPtr->data & 0x0000FF00) >> 8);
+					//if (!ioBus.io) {ioBus.addr += 2;}
+					ioBus.addr += 2;
+					//ioBus.data = ((procBusPtr->data & 0x000000FF) << 8) | ((procBusPtr->data & 0x0000FF00) >> 8);
+					if (!ioBus.io) {ioBus.data = procBusPtr->data;}
 					ioBus.sbhe = SBHE_2bytes;
 					logmsgf(LOGIO, "IO:  Halfword write 0x%06X : 0x%04X\n", ioBus.addr, ioBus.data);
 					ioaccessAll();
 				} else {
-					if (!ioBus.io) {ioBus.addr++;}
-					ioBus.data = (procBusPtr->data & 0x00FF0000) >> 16;
+					//if (!ioBus.io) {ioBus.addr++;}
+					ioBus.addr++;
+					//ioBus.data = (procBusPtr->data & 0x00FF0000) >> 16;
+					if (!ioBus.io) {ioBus.data = ((procBusPtr->data & 0xFF000000) >> 24);}
 					ioBus.sbhe = SBHE_1byte;
 					logmsgf(LOGIO, "IO:     Byte write 0x%06X : 0x%04X\n", ioBus.addr, ioBus.data);
 					ioaccessAll();
-					if (!ioBus.io) {ioBus.addr++;}
-					ioBus.data = (procBusPtr->data & 0x0000FF00) >> 8;
+					//if (!ioBus.io) {ioBus.addr++;}
+					ioBus.addr++;
+					//ioBus.data = (procBusPtr->data & 0x0000FF00) >> 8;
+					if (!ioBus.io) {ioBus.data = (procBusPtr->data & 0x000000FF);}
 					ioBus.sbhe = SBHE_1byte;
 					logmsgf(LOGIO, "IO:     Byte write 0x%06X : 0x%04X\n", ioBus.addr, ioBus.data);
 					ioaccessAll();
-					if (!ioBus.io) {ioBus.addr++;}
-					ioBus.data = procBusPtr->data & 0x000000FF;
+					//if (!ioBus.io) {ioBus.addr++;}
+					ioBus.addr++;
+					//ioBus.data = procBusPtr->data & 0x000000FF;
+					if (!ioBus.io) {ioBus.data = (procBusPtr->data & 0x0000FF00) >> 8;}
 					ioBus.sbhe = SBHE_1byte;
 					logmsgf(LOGIO, "IO:     Byte write 0x%06X : 0x%04X\n", ioBus.addr, ioBus.data);
 					ioaccessAll();
@@ -248,25 +283,32 @@ void ioaccess (void) {
 				ioaccessAll();
 				logmsgf(LOGIO, "IO: Word read      0x%06X : 0x%04X\n", ioBus.addr, ioBus.data);
 				if (ioBus.cs16) {
-					procBusPtr->data = ((ioBus.data & 0x00FF) << 24) | ((ioBus.data & 0xFF00) << 8);
-					if (!ioBus.io) {ioBus.addr += 2;}
+					//procBusPtr->data = ((ioBus.data & 0x00FF) << 24) | ((ioBus.data & 0xFF00) << 8);
+					procBusPtr->data = (ioBus.data << 16);
+					//if (!ioBus.io) {ioBus.addr += 2;}
+					ioBus.addr += 2;
 					ioaccessAll();
 					logmsgf(LOGIO, "IO:  Halfword read 0x%06X : 0x%04X\n", ioBus.addr, ioBus.data);
-					procBusPtr->data = ((ioBus.data & 0x00FF) << 8) | ((ioBus.data & 0xFF00) >> 8);
+					//procBusPtr->data |= ((ioBus.data & 0x00FF) << 8) | ((ioBus.data & 0xFF00) >> 8);
+					procBusPtr->data |= ioBus.data;
 				} else {
+					//procBusPtr->data = (ioBus.data & 0x00FF) << 24;
 					procBusPtr->data = (ioBus.data & 0x00FF) << 16;
 					ioBus.sbhe = SBHE_1byte;
 					if (!ioBus.io) {ioBus.addr++;}
 					ioaccessAll();
 					logmsgf(LOGIO, "IO:     Byte read 0x%06X : 0x%04X\n", ioBus.addr, ioBus.data);
+					//procBusPtr->data |= (ioBus.data & 0x00FF) << 16;
 					procBusPtr->data |= (ioBus.data & 0x00FF) << 24;
 					if (!ioBus.io) {ioBus.addr++;}
 					ioaccessAll();
 					logmsgf(LOGIO, "IO:     Byte read 0x%06X : 0x%04X\n", ioBus.addr, ioBus.data);
+					//procBusPtr->data |= (ioBus.data & 0x00FF) << 8;
 					procBusPtr->data |= (ioBus.data & 0x00FF);
 					if (!ioBus.io) {ioBus.addr++;}
 					ioaccessAll();
 					logmsgf(LOGIO, "IO:     Byte read 0x%06X : 0x%04X\n", ioBus.addr, ioBus.data);
+					//procBusPtr->data |= (ioBus.data & 0x00FF);
 					procBusPtr->data |= (ioBus.data & 0x00FF) << 8;
 				}
 			}

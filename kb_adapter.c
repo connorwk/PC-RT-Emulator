@@ -170,6 +170,7 @@ void cyclekbadpt (struct structkbadpt* currkbadpt) {
 
 	if (!(currkbadpt->PC & PC_PAOutBufEmpty)) {
 		// We have a command to process
+		currkbadpt->PC |= PC_PAOutBufEmpty;
 		if (currkbadpt->cmdReg & 0xE0) {logmsgf(LOGKBADPT, "KBADPT: Diag CMD bits not zero CMD:0x%02X PA:0x%02X\n", currkbadpt->cmdReg, currkbadpt->PA);}
 		if (currkbadpt->cmdReg == 0) {
 			// Extended commands pg. 5-99
