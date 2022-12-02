@@ -125,7 +125,7 @@ void access8237 (struct struct8237* curr8237) {
 	}
 }
 
-void cycle8238 (struct struct8237* curr8237) {
+void cycle8237 (struct struct8237* curr8237) {
 	if (!curr8237->reset) {
 		curr8237->flipFlop = 0;
 		return;

@@ -28,7 +28,7 @@ int halt = 0;
 int main (void) {
 	gui_init();
 	loginit("log.txt");
-	//enlogtypes(LOG8259 | LOGIO | LOGPROC);
+	enlogtypes(LOGIO | LOG8259 | LOGKBADPT);
 	memptr = meminit();
 	rominit("bins/79X34xx.BIN");
 	ioinit(&procBus);

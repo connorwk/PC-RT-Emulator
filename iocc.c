@@ -7,6 +7,7 @@
 #include "defs.h"
 #include "iocc.h"
 #include "mmu.h"
+#include "kb_adapter.h"
 #include "8237.h"
 #include "8259a.h"
 #include "rtc.h"
@@ -14,6 +15,7 @@
 #include "logfac.h"
 
 struct SysBrdConfig sysbrdcnfg;
+struct structkbadpt kbAdapter;
 struct struct8237 dmaCtrl1;
 struct struct8237 dmaCtrl2;
 struct struct8259 intCtrl1;
@@ -28,6 +30,7 @@ uint8_t CSRlocked;
 
 void ioinit (struct procBusStruct* procBusPointer) {
 	procBusPtr = procBusPointer;
+	initkbadpt(&kbAdapter, &ioBus, 0x008400, 0xFFFFF8);
 	initRTC(&sysRTC, &ioBus, 0x008800, 0xFFFFC0);
 	init8237(&dmaCtrl1, &ioBus, 0x008840, 0xFFFFF0);
 	init8237(&dmaCtrl2, &ioBus, 0x008860, 0xFFFFF0);
@@ -51,7 +54,11 @@ void iocycle (void) {
 
 	dmaCtrl1.reset = (sysbrdcnfg.CRRBReg & CRRB_DMACtrl1) >> 3;
 	dmaCtrl2.reset = (sysbrdcnfg.CRRBReg & CRRB_DMACtrl2) >> 4;
-
+	kbAdapter.reset = (sysbrdcnfg.CRRBReg & CRRB_8051) >> 2;
+	cyclekbadpt(&kbAdapter);
+	intCtrl1.intLines |= (kbAdapter.intReq << 5);
+	cycle8237(&dmaCtrl1);
+	cycle8237(&dmaCtrl2);
 	cycle8259(&intCtrl1);
 	cycle8259(&intCtrl2);
 
@@ -129,6 +136,7 @@ void accessSysBrdRegs (void) {
 			}
 		}
 		if ((ioBus.addr & 0xFFF801) == 0x010000) {
+			if (!ioBus.sbhe) {logmsgf(LOGIO, "IO: Warning TCW access should be a word access.\n");};
 			if (ioBus.rw) {
 				logmsgf(LOGIO, "IO: Write TCW %d 0x%04X\n", ((ioBus.addr & 0x0007FE) >> 1), ioBus.data);
 				sysbrdcnfg.TCW[((ioBus.addr & 0x0007FE) >> 1)] = ioBus.data;
@@ -142,6 +150,7 @@ void accessSysBrdRegs (void) {
 
 void ioaccessAll (void) {
 	accessSysBrdRegs();
+	accesskbadpt(&kbAdapter);
 	accessRTC(&sysRTC);
 	access8237(&dmaCtrl1);
 	access8237(&dmaCtrl2);
