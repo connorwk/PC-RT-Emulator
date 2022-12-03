@@ -384,14 +384,14 @@ void decode (uint32_t inst, uint8_t mode) {
 				break;
 			case 0x8D:
 				// BALIX
-				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	BALIX GPR%d, %d\n SUB", SCR.IAR, inst, r2, sI16 << 1);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	BALIX GPR%d, %d\n", SCR.IAR, inst, r2, sI16 << 1);
 				if (mode == DIRECTEXEC) {
 					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
 				}
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
-				GPR[r2] = SCR.IAR;
-				logmsgf(LOGINSTR, "			GPR%d: 0x%08X\n", r2, GPR[r2]);
+				GPR[r2] = SCR.IAR+4;
+				logmsgf(LOGINSTR, "			GPR%d: 0x%08X\n SUB", r2, GPR[r2]);
 				decode(procBusCycle(SCR.IAR, 0, WIDTH_INST, RW_LOAD, 0), DIRECTEXEC);
 				SCR.IAR = instIAR + (sI16 << 1);
 				break;
@@ -1279,7 +1279,7 @@ void decode (uint32_t inst, uint8_t mode) {
 					return;
 				}
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
-				GPR[r2] = SCR.IAR;
+				GPR[r2] = SCR.IAR+4;
 				logmsgf(LOGINSTR, "			GPR%d: 0x%08X\n SUB", r2, GPR[r2]);
 				decode(procBusCycle(SCR.IAR, 0, WIDTH_INST, RW_LOAD, 0), DIRECTEXEC);
 				SCR.IAR = GPR[r3] & 0xFFFFFFFE;

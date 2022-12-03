@@ -58,6 +58,11 @@ void iocycle (void) {
 	kbAdapter.reset = (sysbrdcnfg.CRRBReg & CRRB_8051) >> 2;
 	cyclekbadpt(&kbAdapter);
 	intCtrl1.intLines |= (kbAdapter.intReq << 5);
+	cycleRTC(&sysRTC);
+	if (sysRTC.intReq) {
+		procBusPtr->intrpt = INTRPT_1_RealTimeClock;
+	}
+	kbAdapter.PB = (sysRTC.sqwOut << 3);
 	cycle8237(&dmaCtrl1);
 	cycle8237(&dmaCtrl2);
 	cycle8259(&intCtrl1);

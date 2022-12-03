@@ -50,7 +50,7 @@ void initSharedRam (struct structkbadpt* currkbadpt) {
 void initkbadpt (struct structkbadpt* currkbadpt, struct ioBusStruct* ioBusPointer, uint32_t ioaddr, uint32_t ioaddrMask) {
 	currkbadpt->ioAddress = ioaddr;
 	currkbadpt->ioAddressMask = ioaddrMask;
-	currkbadpt->irqEn = 1;
+	currkbadpt->irqEn = 0;
 	currkbadpt->intReq = 0;
 	currkbadpt->initReq = RESET_Delay;
 	ioBusPtr = ioBusPointer;
@@ -63,11 +63,15 @@ void writekbadpt (struct structkbadpt* currkbadpt) {
 		case 0x0:
 			if (currkbadpt->PC & PC_PAOutBufEmpty) {
 				if (!ioBusPtr->sbhe) {logmsgf(LOGKBADPT, "KBADPT: Warning write PA should be a word access.\n");};
-				if (ioBusPtr->data & 0xC000) {logmsgf(LOGKBADPT, "KBADPT: Warning write PA bits 15-14 should be 0.\n");};
+				//if (ioBusPtr->data & 0xC000) {logmsgf(LOGKBADPT, "KBADPT: Warning write PA bits 15-14 should be 0.\n");};
+				if (ioBusPtr->data & 0x00C0) {logmsgf(LOGKBADPT, "KBADPT: Warning write PA bits 15-14 should be 0.\n");};
 				if (!(currkbadpt->PC & PC_PAOutBufEmpty)) {logmsgf(LOGKBADPT, "KBADPT: Error write to PA when PA Out Buffer not empty.\n");}
-				currkbadpt->cmdReg = (ioBusPtr->data & 0x3F00) >> 8;
-				currkbadpt->PA = data;
+				//currkbadpt->cmdReg = (ioBusPtr->data & 0x3F00) >> 8;
+				//currkbadpt->PA = data;
+				currkbadpt->cmdReg = data & 0x3F;
+				currkbadpt->PA = (ioBusPtr->data & 0xFF00) >> 8;
 				currkbadpt->PC &= ~PC_PAOutBufEmpty;
+				logmsgf(LOGKBADPT, "KBADPT: Write PA 0x%04X\n", ioBusPtr->data);
 			} else {
 				logmsgf(LOGKBADPT, "KBADPT: Error write PA attempted when PA Out Buf is full.\n");
 			}
@@ -90,13 +94,16 @@ void writekbadpt (struct structkbadpt* currkbadpt) {
 void readkbadpt (struct structkbadpt* currkbadpt) {
 	switch (ioBusPtr->addr & 0x000007) {
 		case 0x4:
-			if (!(currkbadpt->PC & PC_IntReq)) {logmsgf(LOGKBADPT, "KBADPT: Error Read from PA when data not valid.\n");}
+			//if (!(currkbadpt->PC & PC_IntReq)) {logmsgf(LOGKBADPT, "KBADPT: Error Read from PA when data not valid.\n");}
+			if (!(currkbadpt->PC & PC_PAInBufFull)) {logmsgf(LOGKBADPT, "KBADPT: Error Read from PA when data not valid.\n");}
 			ioBusPtr->data = currkbadpt->PA;
 			currkbadpt->PC &= ~(PC_IntReq | PC_PAInBufFull);
 			logmsgf(LOGKBADPT, "KBADPT: Read from PA 0x%02X\n", ioBusPtr->data);
 			break;
 		case 0x5:
 			ioBusPtr->data = currkbadpt->PB;
+			// bit 3 may be squarewave output from RTC
+			//ioBusPtr->data = ((currkbadpt->sharedRam[0x11] & MODE1_SpkVol) << 5);
 			logmsgf(LOGKBADPT, "KBADPT: Read from PB 0x%02X\n", ioBusPtr->data);
 			break;
 		case 0x6:
@@ -124,13 +131,55 @@ void accesskbadpt (struct structkbadpt* currkbadpt) {
 
 void setReturnVals (struct structkbadpt* currkbadpt, uint8_t valPA, uint8_t intID) {
 	currkbadpt->PA = valPA;
-	currkbadpt->PC = PC_PAInBufFull | PC_IntReq | intID;
+	if (currkbadpt->irqEn) {
+		currkbadpt->PC = (currkbadpt->PC & ~PC_IntLevel) | PC_PAInBufFull | PC_IntReq | intID;
+	} else {
+		currkbadpt->PC = (currkbadpt->PC & ~PC_IntLevel) | PC_PAInBufFull | intID;
+	}
+}
+
+int circBufPush (struct circ_buf* buf, uint8_t data) {
+	uint8_t next;
+	next = buf->head + 1;
+	if (next >= BUFMAX) {next = 0;}
+	if (next == buf->tail) {return -1;}
+
+	buf->buffer[buf->head] = data;
+	buf->head = next;
+	return 0;
+}
+
+int circBufPop(struct circ_buf* buf, uint8_t *data)
+{
+	uint8_t next;
+	if (buf->head == buf->tail) {return -1;}
+	next = buf->tail + 1;
+	if(next >= BUFMAX) {next = 0;}
+
+	*data = buf->buffer[buf->tail];
+	buf->tail = next;
+	return 0;
+}
+
+uint8_t circBufGetLen(struct circ_buf* buf) {
+	uint8_t next;
+	uint8_t length;
+	if (buf->head == buf->tail) {return 0;}
+	next = buf->tail + 1;
+	if(next >= BUFMAX) {next = 0;}
+	length++;
+	while (next != buf->head) {
+		next++;
+		if(next >= BUFMAX) {next = 0;}
+		length++;
+	}
+	return length;
 }
 
 void cyclekbadpt (struct structkbadpt* currkbadpt) {
 	// This cycle acts like the 8051 running.
 	if (!currkbadpt->reset) {
-		currkbadpt->irqEn = 1;
+		currkbadpt->irqEn = 0;
 		currkbadpt->intReq = 0;
 		currkbadpt->initReq = RESET_Delay;
 		return;
@@ -143,12 +192,13 @@ void cyclekbadpt (struct structkbadpt* currkbadpt) {
 	} else if (currkbadpt->initReq == 1) {
 		logmsgf(LOGKBADPT, "KBADPT: Initialized after reset released\n");
 		initSharedRam(currkbadpt);
-		setReturnVals(currkbadpt, 0xAE, 0x6);
+		setReturnVals(currkbadpt, 0xAE, INTID_8051SelfTest);
 		currkbadpt->initReq--;
 		return;
 	}
 
-	if (currkbadpt->irqEn && (currkbadpt->PC & PC_IntReq)) {
+	//if (currkbadpt->irqEn && (currkbadpt->PC & PC_IntReq)) {
+		if (currkbadpt->PC & PC_IntReq) {
 		currkbadpt->intReq = 1;
 	} else {
 		currkbadpt->intReq = 0;
@@ -158,59 +208,120 @@ void cyclekbadpt (struct structkbadpt* currkbadpt) {
 		// Wait for host to process what we have in the PA buff already.
 		return;
 	}
+
+	// TODO: Process other keyboard commands in seperate function for readability probably...
+	// Keyboard Command Processing pg. 9-5
+	if (currkbadpt->kbCmdIn == 0xFF) {
+		// Keyboard reset
+		uint8_t ret = 0;
+		ret += circBufPush(&currkbadpt->kbBuf, 0xAA);
+		ret += circBufPush(&currkbadpt->kbBuf, 0xBF);
+		ret += circBufPush(&currkbadpt->kbBuf, 0xB0); // Last nibble is keyboard type, what's valid here? pg. 5-143
+		if (ret) {logmsgf(LOGKBADPT, "KBADPT: Error KB Buf full.\n");}
+		currkbadpt->kbCmdIn = 0;
+	}
 	
+	// Keyboard buffer not empty send byte
+	if (currkbadpt->kbBuf.head != currkbadpt->kbBuf.tail) {
+		uint8_t byte;
+		circBufPop(&currkbadpt->kbBuf, &byte);
+		setReturnVals(currkbadpt, byte, INTID_KBByteRX);
+	}
+
+	// TODO: Process UART (locator) commands in seperate function for readability probably...
+	/*
+	if (currkbadpt->uartCmdIn == 0x09) {
+		// Locator disable stream mode
+		uint8_t ret = 0;
+		// No idea what they want us to return here! TODO
+		// Returning reset values for now...
+		ret += circBufPush(&currkbadpt->uartBuf, 0xFF);
+		//ret += circBufPush(&currkbadpt->uartBuf, 0x80);
+		//ret += circBufPush(&currkbadpt->uartBuf, 0x00);
+		//ret += circBufPush(&currkbadpt->uartBuf, 0x00);
+		if (ret) {logmsgf(LOGKBADPT, "KBADPT: Error UART Buf full.\n");}
+		currkbadpt->uartCmdIn = 0;
+	}
+	*/
+
+	// UART buffer not empty
+	if (currkbadpt->sharedRam[0x10] & MODE0_BlockReceivedUARTBytes) {
+		if (currkbadpt->reportLen) {
+			uint8_t byte;
+			circBufPop(&currkbadpt->uartBuf, &byte);
+			setReturnVals(currkbadpt, byte, INTID_UARTByteRX);
+			currkbadpt->reportLen--;
+		} else if (circBufGetLen(&currkbadpt->uartBuf) >= (currkbadpt->sharedRam[0x19] & 0x0F)) {
+			currkbadpt->reportLen = currkbadpt->sharedRam[0x19] & 0x0F;
+		}
+	} else {
+		if (currkbadpt->uartBuf.head != currkbadpt->uartBuf.tail) {
+			uint8_t byte;
+			circBufPop(&currkbadpt->uartBuf, &byte);
+			setReturnVals(currkbadpt, byte, INTID_UARTByteRX);
+		}
+	}
+
 	// TODO: ramQueue processing
 
 	if (currkbadpt->initReq > RESET_Delay) {
 		// Soft reset pg. 5-107
 		// Requires two additional bytes to be sent...
-		setReturnVals(currkbadpt, 0x00, 0x7);
+		setReturnVals(currkbadpt, 0x00, INTID_8051Error);
 		currkbadpt->initReq--;
 	}
 
 	if (!(currkbadpt->PC & PC_PAOutBufEmpty)) {
 		// We have a command to process
 		currkbadpt->PC |= PC_PAOutBufEmpty;
+		currkbadpt->PC &= ~PC_IntReq;
+		currkbadpt->intReq = 0;
 		if (currkbadpt->cmdReg & 0xE0) {logmsgf(LOGKBADPT, "KBADPT: Diag CMD bits not zero CMD:0x%02X PA:0x%02X\n", currkbadpt->cmdReg, currkbadpt->PA);}
 		if (currkbadpt->cmdReg == 0) {
 			// Extended commands pg. 5-99
 			if (currkbadpt->PA >= 0x00 && currkbadpt->PA <= 0x1F) {
 				// Read shared ram
 				uint8_t offset = currkbadpt->PA;
-				setReturnVals(currkbadpt, currkbadpt->sharedRam[offset], 0x3);
-				logmsgf(LOGKBADPT, "KBADPT: ExtCMD read ram 0x%02X\n", currkbadpt->PA);
+				setReturnVals(currkbadpt, currkbadpt->sharedRam[offset], INTID_RetReqByte);
+				logmsgf(LOGKBADPT, "KBADPT: ExtCMD read ram 0x%02X: 0x%02X\n", offset, currkbadpt->PA);
 			} else if (currkbadpt->PA >= 0x20 && currkbadpt->PA <= 0x2F) {
 				// Reset mode bit
-				logmsgf(LOGKBADPT, "KBADPT: ExtCMD reset mode bit %d\n", currkbadpt->PA & 0x0F);
 				if (!(currkbadpt->PA & 0x08)) {
+					logmsgf(LOGKBADPT, "KBADPT: ExtCMD reset mode bit %d 0x%02X\n", currkbadpt->PA & 0x0F, currkbadpt->sharedRam[0x10]);
 					currkbadpt->sharedRam[0x10] &= ~(0x01 << (currkbadpt->PA & 0x07));
-					setReturnVals(currkbadpt, 0x00, 0x0);
+					logmsgf(LOGKBADPT, "KBADPT:                          0x%02X\n", currkbadpt->sharedRam[0x10]);
+					setReturnVals(currkbadpt, 0x00, INTID_Info);
 				} else {
 					if (currkbadpt->PA == 11) {
 						if (currkbadpt->sharedRam[0x11] & MODE1_DiagMode) {
+							logmsgf(LOGKBADPT, "KBADPT: ExtCMD reset mode bit %d 0x%02X\n", currkbadpt->PA & 0x0F, currkbadpt->sharedRam[0x11]);
 							currkbadpt->sharedRam[0x11] &= ~(0x01 << (currkbadpt->PA & 0x07));
-							setReturnVals(currkbadpt, 0x00, 0x0);
+							logmsgf(LOGKBADPT, "KBADPT:                          0x%02X\n", currkbadpt->sharedRam[0x11]);
+							setReturnVals(currkbadpt, 0x00, INTID_Info);
 						} else {
 							logmsgf(LOGKBADPT, "KBADPT: Error can't disable keyboard when not in Diag mode\n");
-							setReturnVals(currkbadpt, 0x51, 0x0);
+							setReturnVals(currkbadpt, 0x51, INTID_Info);
 						}
 					} else {
 						currkbadpt->sharedRam[0x11] &= ~(0x01 << (currkbadpt->PA & 0x07));
-						setReturnVals(currkbadpt, 0x00, 0x0);
+						setReturnVals(currkbadpt, 0x00, INTID_Info);
 					}
 				}
 			} else if (currkbadpt->PA >= 0x30 && currkbadpt->PA <= 0x3F) {
 				// Set mode bit
-				logmsgf(LOGKBADPT, "KBADPT: ExtCMD set mode bit %d\n", currkbadpt->PA & 0x0F);
 				if (!(currkbadpt->PA & 0x08)) {
+					logmsgf(LOGKBADPT, "KBADPT: ExtCMD set mode bit %d 0x%02X\n", currkbadpt->PA & 0x0F, currkbadpt->sharedRam[0x10]);
 					currkbadpt->sharedRam[0x10] |= 0x01 << (currkbadpt->PA & 0x07);
+					logmsgf(LOGKBADPT, "KBADPT:                        0x%02X\n", currkbadpt->sharedRam[0x10]);
 				} else {
+					logmsgf(LOGKBADPT, "KBADPT: ExtCMD set mode bit %d 0x%02X\n", currkbadpt->PA & 0x0F, currkbadpt->sharedRam[0x11]);
 					currkbadpt->sharedRam[0x11] |= 0x01 << (currkbadpt->PA & 0x07);
+					logmsgf(LOGKBADPT, "KBADPT:                        0x%02X\n", currkbadpt->sharedRam[0x11]);
 				}
-				setReturnVals(currkbadpt, 0x00, 0x0);
+				setReturnVals(currkbadpt, 0x00, INTID_Info);
 			} else if (currkbadpt->PA >= 0x40 && currkbadpt->PA <= 0x43) {
 				currkbadpt->sharedRam[0x11] = (currkbadpt->sharedRam[0x11] & ~MODE1_SpkVol) | currkbadpt->PA & MODE1_SpkVol;
-				setReturnVals(currkbadpt, 0x00, 0x0);
+				setReturnVals(currkbadpt, 0x00, INTID_Info);
 			} else if (currkbadpt->PA == 0x44) {
 				// Terminate speaker and reset duration
 				logmsgf(LOGKBADPT, "KBADPT: ExtCMD terminate speaker\n");
@@ -218,27 +329,27 @@ void cyclekbadpt (struct structkbadpt* currkbadpt) {
 					currkbadpt->sharedRam[0x12] &= ~(STATUS_SpkQueueFull | STATUS_SpkTimerBusy | STATUS_TimeoutTimerBsy);
 					currkbadpt->sharedRam[0x13] = 0x00;
 					currkbadpt->sharedRam[0x14] = 0x00;
-					setReturnVals(currkbadpt, 0x03, 0x0);
+					setReturnVals(currkbadpt, 0x03, INTID_Info);
 				} else {
-					setReturnVals(currkbadpt, 0x02, 0x0);
+					setReturnVals(currkbadpt, 0x02, INTID_Info);
 				}
 			} else if (currkbadpt->PA >= 0x50 && currkbadpt->PA <= 0x5F) {
 				// Set scan count for sys attn keystroke sequence
 				logmsgf(LOGKBADPT, "KBADPT: ExtCMD set scan count %d\n", currkbadpt->PA & 0x0F);
 				if (currkbadpt->PA >= 0x51 && currkbadpt->PA <= 0x53) {
 					currkbadpt->sharedRam[0x17] = currkbadpt->PA & 0x0F;
-					setReturnVals(currkbadpt, 0x00, 0x0);
+					setReturnVals(currkbadpt, 0x00, INTID_Info);
 				} else {
-					setReturnVals(currkbadpt, 0x50, 0x0);
+					setReturnVals(currkbadpt, 0x50, INTID_Info);
 				}
 			} else if (currkbadpt->PA == 0x60) {
 				// Execute 8051 soft reset
 				logmsgf(LOGKBADPT, "KBADPT: ExtCMD 8051 soft reset\n");
 				if (currkbadpt->sharedRam[0x11] & MODE1_DiagMode) {
 					currkbadpt->initReq = SOFTRESET_Delay;
-					setReturnVals(currkbadpt, 0xA0, 0x7);
+					setReturnVals(currkbadpt, 0xA0, INTID_8051Error);
 				} else {
-					setReturnVals(currkbadpt, 0x51, 0x0);
+					setReturnVals(currkbadpt, 0x51, INTID_Info);
 				}
 			} else if (currkbadpt->PA == 0x61) {
 				// Force system reset
@@ -246,16 +357,16 @@ void cyclekbadpt (struct structkbadpt* currkbadpt) {
 				if (currkbadpt->sharedRam[0x11] & MODE1_DiagMode) {
 					// TODO: Reset system...
 				} else {
-					setReturnVals(currkbadpt, 0x51, 0x0);
+					setReturnVals(currkbadpt, 0x51, INTID_Info);
 				}
 			} else if (currkbadpt->PA == 0x62) {
 				// Force system attn interrupt
 				logmsgf(LOGKBADPT, "KBADPT: ExtCMD force system attention interrupt\n");
 				if (currkbadpt->sharedRam[0x11] & MODE1_DiagMode) {
 					// TODO: System atten interrupt
-					setReturnVals(currkbadpt, 0x00, 0x0);
+					setReturnVals(currkbadpt, 0x00, INTID_Info);
 				} else {
-					setReturnVals(currkbadpt, 0x51, 0x0);
+					setReturnVals(currkbadpt, 0x51, INTID_Info);
 				}
 			} else if (currkbadpt->PA == 0x62) {
 				// Diagnostic sense keyboard/UART port pins
@@ -264,7 +375,7 @@ void cyclekbadpt (struct structkbadpt* currkbadpt) {
 					// Probably don't have to return anything sensible here.
 					setReturnVals(currkbadpt, 0x00, 0x3);
 				} else {
-					setReturnVals(currkbadpt, 0x51, 0x0);
+					setReturnVals(currkbadpt, 0x51, INTID_Info);
 				}
 			} else if (currkbadpt->PA == 0x80) {
 				// Dump adapter shared 0x00-0x0F
@@ -273,10 +384,10 @@ void cyclekbadpt (struct structkbadpt* currkbadpt) {
 					currkbadpt->ramOffset = 0x00;
 					currkbadpt->ramQueue = 0x0F;
 					currkbadpt->ramClear = 0;
-					//setReturnVals(currkbadpt, 0x00, 0x0);
-					setReturnVals(currkbadpt, 0x60, 0x0);
+					//setReturnVals(currkbadpt, 0x00, INTID_Info);
+					setReturnVals(currkbadpt, 0x60, INTID_Info);
 				} else {
-					setReturnVals(currkbadpt, 0x60, 0x0);
+					setReturnVals(currkbadpt, 0x60, INTID_Info);
 				}
 			} else if (currkbadpt->PA == 0x81) {
 				// Dump adapter shared 0x10-0x1F
@@ -285,10 +396,10 @@ void cyclekbadpt (struct structkbadpt* currkbadpt) {
 					currkbadpt->ramOffset = 0x10;
 					currkbadpt->ramQueue = 0x0F;
 					currkbadpt->ramClear = 0;
-					//setReturnVals(currkbadpt, 0x00, 0x0);
-					setReturnVals(currkbadpt, 0x60, 0x0);
+					//setReturnVals(currkbadpt, 0x00, INTID_Info);
+					setReturnVals(currkbadpt, 0x60, INTID_Info);
 				} else {
-					setReturnVals(currkbadpt, 0x60, 0x0);
+					setReturnVals(currkbadpt, 0x60, INTID_Info);
 				}
 			} else if (currkbadpt->PA == 0x82) {
 				// Dump RAS logs 0x20-0x2B
@@ -297,10 +408,10 @@ void cyclekbadpt (struct structkbadpt* currkbadpt) {
 					currkbadpt->ramOffset = 0x20;
 					currkbadpt->ramQueue = 0x0B;
 					currkbadpt->ramClear = 0;
-					//setReturnVals(currkbadpt, 0x00, 0x0);
-					setReturnVals(currkbadpt, 0x60, 0x0);
+					//setReturnVals(currkbadpt, 0x00, INTID_Info);
+					setReturnVals(currkbadpt, 0x60, INTID_Info);
 				} else {
-					setReturnVals(currkbadpt, 0x60, 0x0);
+					setReturnVals(currkbadpt, 0x60, INTID_Info);
 				}
 			} else if (currkbadpt->PA == 0x83) {
 				// Dump RAS logs 0x20-0x2B with clear
@@ -309,16 +420,16 @@ void cyclekbadpt (struct structkbadpt* currkbadpt) {
 					currkbadpt->ramOffset = 0x20;
 					currkbadpt->ramQueue = 0x0B;
 					currkbadpt->ramClear = 1;
-					//setReturnVals(currkbadpt, 0x00, 0x0);
-					setReturnVals(currkbadpt, 0x60, 0x0);
+					//setReturnVals(currkbadpt, 0x00, INTID_Info);
+					setReturnVals(currkbadpt, 0x60, INTID_Info);
 				} else {
-					setReturnVals(currkbadpt, 0x60, 0x0);
+					setReturnVals(currkbadpt, 0x60, INTID_Info);
 				}
 			} else if (currkbadpt->PA == 0x83) {
 				// Restore initial conditions
 				logmsgf(LOGKBADPT, "KBADPT: ExtCMD restore initial conditions\n");
 				initSharedRam(currkbadpt); // Really should only init to 0x1B, but this should be OK
-				setReturnVals(currkbadpt, 0x00, 0x0);
+				setReturnVals(currkbadpt, 0x00, INTID_Info);
 			} else if (currkbadpt->PA >= 0xE0 && currkbadpt->PA <= 0xEF) {
 				// Read 8051 release marker
 				logmsgf(LOGKBADPT, "KBADPT: ExtCMD read 8051 release marker\n");
@@ -326,104 +437,112 @@ void cyclekbadpt (struct structkbadpt* currkbadpt) {
 			} else if (currkbadpt->PA >= 0xF0 && currkbadpt->PA <= 0xFF) {
 				// NOP
 				logmsgf(LOGKBADPT, "KBADPT: ExtCMD NOP\n");
-				setReturnVals(currkbadpt, 0x00, 0x0);
+				setReturnVals(currkbadpt, 0x00, INTID_Info);
 			}
 		} else {
 			// Non-extended Commands pg. 5-102
 			if ((currkbadpt->cmdReg & 0x1F) == 0x01) {
 				// Write to keyboard
 				logmsgf(LOGKBADPT, "KBADPT: CMD write to keyboard 0x%02X\n", currkbadpt->PA);
-				if (currkbadpt->keylock && (currkbadpt->sharedRam[11] & MODE1_HonorKeylock)) {
-					setReturnVals(currkbadpt, 0x42, 0x0);
-				} else if (!(currkbadpt->sharedRam[11] & MODE1_KBInterfaceEn)) {
-					setReturnVals(currkbadpt, 0x43, 0x0);
-				} else if (currkbadpt->PA == currkbadpt->sharedRam[03]) {
-					setReturnVals(currkbadpt, 0x44, 0x0);
+				if (currkbadpt->keylock && (currkbadpt->sharedRam[0x11] & MODE1_HonorKeylock)) {
+					setReturnVals(currkbadpt, 0x42, INTID_Info);
+				} else if (!(currkbadpt->sharedRam[0x11] & MODE1_KBInterfaceEn)) {
+					setReturnVals(currkbadpt, 0x43, INTID_Info);
+				} else if (currkbadpt->PA == currkbadpt->sharedRam[0x03]) {
+					setReturnVals(currkbadpt, 0x44, INTID_Info);
 				} else {
 					// TODO
-					setReturnVals(currkbadpt, 0x00, 0x0);
+					currkbadpt->kbCmdIn = currkbadpt->PA;
+					setReturnVals(currkbadpt, 0x00, INTID_Info);
 				}
 			} else if ((currkbadpt->cmdReg & 0x1F) == 0x02) {
 				// Write to speaker
 				logmsgf(LOGKBADPT, "KBADPT: CMD write to speaker 0x%02X\n", currkbadpt->PA);
 				// TODO
-				setReturnVals(currkbadpt, 0x01, 0x0);
+				setReturnVals(currkbadpt, 0x01, INTID_Info);
 			} else if ((currkbadpt->cmdReg & 0x1F) == 0x03) {
 				// Write to UART - control
 				logmsgf(LOGKBADPT, "KBADPT: CMD write to UART control 0x%02X\n", currkbadpt->PA);
-				if (currkbadpt->keylock && (currkbadpt->sharedRam[11] & MODE1_HonorKeylock)) {
-					setReturnVals(currkbadpt, 0x42, 0x0);
-				} else if (!(currkbadpt->sharedRam[11] & MODE1_UARTInterfaceEn)) {
-					setReturnVals(currkbadpt, 0x4B, 0x0);
+				if (currkbadpt->keylock && (currkbadpt->sharedRam[0x11] & MODE1_HonorKeylock)) {
+					setReturnVals(currkbadpt, 0x42, INTID_Info);
+				} else if (!(currkbadpt->sharedRam[0x11] & MODE1_UARTInterfaceEn)) {
+					setReturnVals(currkbadpt, 0x4B, INTID_Info);
 				} else {
-					// TODO
-					setReturnVals(currkbadpt, 0x00, 0x0);
+					currkbadpt->uartCmdIn = currkbadpt->PA;
+					setReturnVals(currkbadpt, 0x00, INTID_Info);
 				}
 			} else if ((currkbadpt->cmdReg & 0x1F) == 0x04) {
 				// Write to UART - query
 				logmsgf(LOGKBADPT, "KBADPT: CMD write to UART query 0x%02X\n", currkbadpt->PA);
-				if (currkbadpt->keylock && (currkbadpt->sharedRam[11] & MODE1_HonorKeylock)) {
-					setReturnVals(currkbadpt, 0x42, 0x0);
-				} else if (!(currkbadpt->sharedRam[11] & MODE1_UARTInterfaceEn)) {
-					setReturnVals(currkbadpt, 0x4B, 0x0);
+				if (currkbadpt->keylock && (currkbadpt->sharedRam[0x11] & MODE1_HonorKeylock)) {
+					setReturnVals(currkbadpt, 0x42, INTID_Info);
+				} else if (!(currkbadpt->sharedRam[0x11] & MODE1_UARTInterfaceEn)) {
+					setReturnVals(currkbadpt, 0x4B, INTID_Info);
 				} else {
-					// TODO
-					setReturnVals(currkbadpt, 0x00, 0x0);
+					// TODO: Implement locator
+					//setReturnVals(currkbadpt, 0x00, INTID_Info);
+					if (currkbadpt->cmdReg & 0x20) {
+						// If bit 5 of the CMD byte is set we do a loopback on the UART
+						circBufPush(&currkbadpt->uartBuf, currkbadpt->PA);
+					} else {
+						currkbadpt->uartCmdIn = currkbadpt->PA;
+					}
+					setReturnVals(currkbadpt, 0x00, INTID_Info);
 				}
 			} else if ((currkbadpt->cmdReg & 0x1F) == 0x05) {
 				// Set UART baud rate
 				logmsgf(LOGKBADPT, "KBADPT: CMD set UART baud rate 0x%02X\n", currkbadpt->PA);
 				currkbadpt->sharedRam[0x1B] = currkbadpt->PA;
-				setReturnVals(currkbadpt, 0x00, 0x0);
+				setReturnVals(currkbadpt, 0x00, INTID_Info);
 			} else if ((currkbadpt->cmdReg & 0x1F) == 0x06) {
 				// Init UART framing
 				logmsgf(LOGKBADPT, "KBADPT: CMD init UART framing 0x%02X\n", currkbadpt->PA);
 				if (!(currkbadpt->PA & 0x78) && (currkbadpt->PA & 0x07) > 1 && (currkbadpt->PA & 0x07) < 7) {
 					currkbadpt->sharedRam[0x19] = currkbadpt->PA;
-					setReturnVals(currkbadpt, 0x00, 0x0);
+					setReturnVals(currkbadpt, 0x00, INTID_Info);
 				} else {
-					setReturnVals(currkbadpt, 0x4E, 0x0);
+					setReturnVals(currkbadpt, 0x4E, INTID_Info);
 				}
 			} else if ((currkbadpt->cmdReg & 0x1F) == 0x07) {
 				// Set speaker duration
 				logmsgf(LOGKBADPT, "KBADPT: CMD set speaker duration 0x%02X\n", currkbadpt->PA);
-				if (!(currkbadpt->sharedRam[12] & STATUS_SpkQueueFull)) {
+				if (!(currkbadpt->sharedRam[0x12] & STATUS_SpkQueueFull)) {
 					currkbadpt->sharedRam[0x01] = currkbadpt->PA;
-					setReturnVals(currkbadpt, 0x00, 0x0);
+					setReturnVals(currkbadpt, 0x00, INTID_Info);
 				} else {
-					setReturnVals(currkbadpt, 0x4A, 0x0);
+					setReturnVals(currkbadpt, 0x4A, INTID_Info);
 				}
 			} else if ((currkbadpt->cmdReg & 0x1F) == 0x08) {
 				// Set speaker freq high
 				logmsgf(LOGKBADPT, "KBADPT: CMD set speaker freq high 0x%02X\n", currkbadpt->PA);
-				if (!(currkbadpt->sharedRam[12] & STATUS_SpkQueueFull)) {
+				if (!(currkbadpt->sharedRam[0x12] & STATUS_SpkQueueFull)) {
 					currkbadpt->sharedRam[0x15] = currkbadpt->PA;
-					setReturnVals(currkbadpt, 0x00, 0x0);
+					setReturnVals(currkbadpt, 0x00, INTID_Info);
 				} else {
-					setReturnVals(currkbadpt, 0x4A, 0x0);
+					setReturnVals(currkbadpt, 0x4A, INTID_Info);
 				}
 			} else if ((currkbadpt->cmdReg & 0x1F) == 0x09) {
 				// Set speaker freq low
 				logmsgf(LOGKBADPT, "KBADPT: CMD set speaker freq low 0x%02X\n", currkbadpt->PA);
-				if (!(currkbadpt->sharedRam[12] & STATUS_SpkQueueFull)) {
+				if (!(currkbadpt->sharedRam[0x12] & STATUS_SpkQueueFull)) {
 					currkbadpt->sharedRam[0x16] = currkbadpt->PA;
-					setReturnVals(currkbadpt, 0x00, 0x0);
+					setReturnVals(currkbadpt, 0x00, INTID_Info);
 				} else {
-					setReturnVals(currkbadpt, 0x4A, 0x0);
+					setReturnVals(currkbadpt, 0x4A, INTID_Info);
 				}
 			} else if ((currkbadpt->cmdReg & 0x1F) == 0x0C) {
 				// Diagnostic write keyboard port pins
 				logmsgf(LOGKBADPT, "KBADPT: CMD diagnostic write keyboard port 0x%02X\n", currkbadpt->PA);
 				if (currkbadpt->sharedRam[0x11] & MODE1_DiagMode) {
-					setReturnVals(currkbadpt, 0x00, 0x0);
+					setReturnVals(currkbadpt, 0x00, INTID_Info);
 				} else {
-					setReturnVals(currkbadpt, 0x51, 0x0);
+					setReturnVals(currkbadpt, 0x51, INTID_Info);
 				}
 			} else if (currkbadpt->cmdReg & 0x10) {
 				// Write shared ram
-				logmsgf(LOGKBADPT, "KBADPT: CMD write shared ram 0x%02X\n", currkbadpt->PA);
+				logmsgf(LOGKBADPT, "KBADPT: CMD write shared ram 0x%02X: 0x%02X\n", currkbadpt->cmdReg & 0x0F, currkbadpt->PA);
 				currkbadpt->sharedRam[currkbadpt->cmdReg & 0x0F] = currkbadpt->PA;
-				setReturnVals(currkbadpt, 0x00, 0x0);
+				setReturnVals(currkbadpt, 0x00, INTID_Info);
 			}
 		}
 	}

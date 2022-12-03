@@ -27,8 +27,26 @@ struct structrtc {
 			uint8_t rtcMem[50];
 		};
 	};
+	uint64_t prevticks;
+	uint8_t sqwOut;
+	uint8_t intReq;
 };
+
+#define REGB_SET							0x80
+#define REGB_PeriodicIntEn		0x40
+#define REGB_AlarmIntEn				0x20
+#define REGB_UpdateEndIntEn		0x10
+#define REGB_SquareWaveEn			0x08
+#define REGB_DataMode					0x04
+#define REGB_24_12_Mode				0x02
+#define REGB_DaylightSavings	0x01
+
+#define REGC_IRQFlag			0x80
+#define REGC_PeriodicFlag	0x40
+#define REGC_AlarmFlag		0x20
+#define REGC_UpdateEnded	0x10
 
 void initRTC (struct structrtc* currrtc, struct ioBusStruct* ioBusPointer, uint32_t ioaddr, uint32_t ioaddrMask);
 void accessRTC (struct structrtc* currrtc);
+void cycleRTC (struct structrtc* currrtc);
 #endif

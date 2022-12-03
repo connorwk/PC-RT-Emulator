@@ -7,6 +7,14 @@
 #define RESET_Delay 8192
 #define SOFTRESET_Delay RESET_Delay+2
 
+#define BUFMAX 16
+
+struct circ_buf {
+    uint8_t buffer[BUFMAX];
+    uint8_t head;
+    uint8_t tail;
+};
+
 struct structkbadpt {
 	uint32_t ioAddress;
 	uint32_t ioAddressMask;
@@ -23,6 +31,11 @@ struct structkbadpt {
 	uint8_t ramOffset;
 	uint8_t ramClear;
 	uint8_t keylock;
+	uint8_t kbCmdIn;
+	struct circ_buf kbBuf;
+	uint8_t uartCmdIn;
+	uint8_t reportLen;
+	struct circ_buf uartBuf;
 };
 
 #define PC_PAOutBufEmpty	0x80
@@ -54,6 +67,15 @@ struct structkbadpt {
 #define STATUS_UARTTXBusy				0x10
 #define STATUS_ClickBusy				0x20
 #define STATUS_SpkQueueFull			0x80
+
+// Interrupt IDs pg. 5-97
+#define INTID_Info					0x0
+#define INTID_KBByteRX			0x1
+#define INTID_UARTByteRX		0x2
+#define INTID_RetReqByte		0x3
+#define INTID_BlockTrans		0x4
+#define INTID_8051SelfTest	0x6
+#define INTID_8051Error			0x7
 
 void initkbadpt (struct structkbadpt* currkbadpt, struct ioBusStruct* ioBusPointer, uint32_t ioaddr, uint32_t ioaddrMask);
 void accesskbadpt (struct structkbadpt* currkbadpt);

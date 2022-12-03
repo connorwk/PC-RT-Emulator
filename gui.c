@@ -230,7 +230,7 @@ void setup_text_textures (void) {
 	generateTextTexture(&textlist[59], "0x00000000", textColor, CHARW*69, CHARH*32, TEXT);
 
 	//generateTextTexture(&textboxlist[0], "00800238", textColor, CHARW*70, CHARH*25, TEXTBOX);
-	generateTextTexture(&textboxlist[0], "008017d4", textColor, CHARW*70, CHARH*25, TEXTBOX);
+	generateTextTexture(&textboxlist[0], "00801a60", textColor, CHARW*70, CHARH*25, TEXTBOX);
 	generateTextTexture(&textboxlist[1], "00000000", textColor, CHARW*48, CHARH*26, TEXTBOX);
 	iarbreakptval = strtol(textboxlist[0].text, NULL, 16);
 	memaddrval = strtol(textboxlist[1].text, NULL, 16);
