@@ -10,6 +10,9 @@ This project is written in C and uses SDL2 for rendering a GUI.
 - DONE ~~Implement address translation and memory protection.~~
 - DONE ~~Add ECC generation and checking.~~
 - DONE ~~Add Interrupt support, Program Check support, and Machine Check support.~~
+- DONE ~~Add barebones IOCC implementation.~~
+- DONE ~~Add Barebones system board registers, 8259 interrupt controller, 8237 dma controller, RTC, and keyboard adapter.
+- Current Tash: *Debug whats wrong with 8259 interrupt controller.*
 - Current Task: *Stumble through processor init rom tests implementing features and fixing instruction bugs as tests fail. (this will only be marked DONE when all tests pass)*
 - Implement I/O: FDC, MDA, KB being the first few along with any required system board I/O to get first signs of system interaction. (Boot Diag disk?)
 - Add either vscode config files to allow simple building on other machines that way or some automated build system in actions to build project for multiple platforms. (Currently built on an M1 Macbook Air but code should be portable.)
