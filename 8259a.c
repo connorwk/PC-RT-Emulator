@@ -84,9 +84,10 @@ void write8259 (struct struct8259* curr8259) {
 				if (curr8259->isr & 0x40) {curr8259->isr &= ~0x40; return;}
 				if (curr8259->isr & 0x80) {curr8259->isr &= ~0x80; return;}
 			} else if ((ioBusPtr->data & OCW2_CMD) == OCW2_CMD_SpecEOI) {
-				logmsgf(LOG8259, "8259: OCW2 Specific EOI reset ISR: 0x%02X\n", ~(0x01 << (ioBusPtr->data & OCW2_Level)));
+				logmsgf(LOG8259, "8259: OCW2 Specific EOI reset ISR: 0x%02X\n", (~(0x01 << (ioBusPtr->data & OCW2_Level)) & 0xFF));
 				curr8259->freezeIRR = 0;
 				curr8259->irr = 0;
+				curr8259->intreq = 0;
 				curr8259->isr &= ~(0x01 << (ioBusPtr->data & OCW2_Level));
 			} else {
 				logmsgf(LOG8259, "8259: Error not supported OCW2 0x%04X\n", ioBusPtr->data);
@@ -95,6 +96,10 @@ void write8259 (struct struct8259* curr8259) {
 			// Write OCW3
 			logmsgf(LOG8259, "8259: Write OCW3 0x%04X\n", ioBusPtr->data);
 			curr8259->ocw3 = data;
+		} else if ((ioBusPtr->data & 0x00000018) == 0x10) {
+			// Write ICW1
+			logmsgf(LOG8259, "8259: Write ICW1 0x%04X\n", ioBusPtr->data);
+			curr8259->icw1 = data;
 		} else {
 			logmsgf(LOG8259, "8259: Error invalid write 0x%04X\n", ioBusPtr->addr);
 		}
