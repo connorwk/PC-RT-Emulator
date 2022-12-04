@@ -15,6 +15,9 @@ struct procBusStruct* procBusPtr;
 uint8_t* memory;
 uint8_t* rom;
 
+uint8_t lastAddr;
+uint8_t dispCode;
+
 union MMUIOspace* iommuregs;
 uint8_t MEARlocked = 0;
 uint8_t RMDRlocked = 0;
@@ -52,11 +55,13 @@ void rominit (const char *file) {
 	}
 }
 
-void mmuinit (uint8_t* memptr, struct procBusStruct* procBus) {
+uint8_t* mmuinit (uint8_t* memptr, struct procBusStruct* procBus) {
 	memory = memptr;
 	procBusPtr = procBus;
 	iommuregs = malloc(MMUCONFIGSIZE*4);
 	memset(iommuregs->_direct, 0, MMUCONFIGSIZE);
+	dispCode = 0xFF;
+	return &dispCode;
 }
 
 void loadMEAR(void) {
@@ -630,6 +635,10 @@ void procwrite (void) {
 		realwrite(procBusPtr->addr, procBusPtr->data, procBusPtr->width);
 	} else {
 		// PIO
+
+		// If unprivilaged set exception.
+		if (procBusPtr->priv) {procBusPtr->flags = FLAGS_Exception; return;}
+
 		if (procBusPtr->addr == 0x00808000) {
 			// Special access to allow setup of IO Base Addr Reg directly
 			logmsgf(LOGMMU, "MMU: Write to IO Base Addr Reg DIRECT 0x%08X\n", procBusPtr->data);
@@ -639,6 +648,8 @@ void procwrite (void) {
 			if ( ((procBusPtr->addr & 0x0000FFFF) >= 0x1000) && ((procBusPtr->addr & 0x0000FFFF) <= 0x2FFF) ) {
 				// Only last two bits of Ref/Change regs are valid
 				iommuregs->_direct[procBusPtr->addr & 0x0000FFFF] = (procBusPtr->data & 0x00000003);
+				logmsgf(LOGMMU, "MMU: Write to R/C bits 0x%08X\n", procBusPtr->data);
+				dispCode = 0xFF;
 			}
 			switch(procBusPtr->addr & 0x0000FFFF) {
 				case 0x0018:
@@ -662,11 +673,16 @@ void procwrite (void) {
 }
 
 void procread (void) {
+	if (procBusPtr->width != WIDTH_INST) {lastAddr = procBusPtr->addr;}
 	procBusPtr->data = 0;
 	if (procBusPtr->pio == PIO_REAL) {
 			procBusPtr->data = realread(procBusPtr->addr, procBusPtr->width);
 	} else {
 		// PIO
+
+		// If unprivilaged set exception.
+		if (procBusPtr->priv) {procBusPtr->flags = FLAGS_Exception; return;}
+
 		if (procBusPtr->addr == 0x00808000) {
 			// Special access to allow setup of IO Base Addr Reg directly
 			procBusPtr->data = iommuregs->IOBaseAddr;
@@ -683,6 +699,13 @@ void procread (void) {
 				case 0x0018:
 					RMDRlocked = 0;
 					break;
+			}
+			if ( ((procBusPtr->addr & 0x0000FFFF) >= 0x1000) && ((procBusPtr->addr & 0x0000FFFF) <= 0x2FFF) ) {
+				logmsgf(LOGMMU, "MMU: Read R/C bits 0x%02X\n", procBusPtr->addr & 0x000000FF);
+				// TODO: Fix this so it only updates the display code when the last read is from rom?
+				//if ((lastAddr >= (ROMSPECStartAddr)) && (lastAddr <= ROMSPECEndAddr) && ((iommuregs->ROMSpec & ROMSPECSize) != 0)) {
+					dispCode = procBusPtr->addr & 0x000000FF;
+				//}
 			}
 		} else {
 			logmsgf(LOGMMU, "MMU: Error PIO read outside valid ranges 0x%08X\n", procBusPtr->addr);

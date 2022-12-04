@@ -15,6 +15,7 @@
 uint8_t *memptr;
 uint32_t *GPRptr;
 union SCRs *SCRptr;
+uint8_t *displayCode;
 
 // PROC Bus
 // A pointer to this is handed to each unit who needs it (romp.c, mmu.c, iocc.c)
@@ -33,10 +34,10 @@ int main (void) {
 	rominit("bins/79X34xx.BIN");
 	ioinit(&procBus);
 	SCRptr = getSCRptr();
-	mmuinit(memptr, &procBus);
+	displayCode = mmuinit(memptr, &procBus);
 	GPRptr = procinit(&procBus);
 
-	romp_pointers(GPRptr, SCRptr, memptr, getMDAPtr());
+	romp_pointers(GPRptr, SCRptr, memptr, getMDAPtr(), displayCode);
 	int close = 0;
 
 	while(!close) {

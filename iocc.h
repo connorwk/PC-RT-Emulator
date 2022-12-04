@@ -35,7 +35,8 @@ struct ioDecode {
 #define CCR_DMACtrlRegAcc		0x80
 #define CCR_DMAIOAdptAcc		0x40
 #define CCR_DMAKeyboardAcc	0x20
-#define CCR_ProcAcc					0x18
+#define CCR_IOMapPrivAcc		0x10
+#define CCR_MemMapPrivAcc		0x08
 #define CCR_RefreshCtrl			0x06
 
 // Component Reset Reg A pg. 5-59

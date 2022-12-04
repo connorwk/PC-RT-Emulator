@@ -26,13 +26,13 @@ void initRTC (struct structrtc* currrtc, struct ioBusStruct* ioBusPointer, uint3
 
 void writeRTCregs (struct structrtc* currrtc) {
 	logmsgf(LOGRTC, "RTC: Write 0x%02X: 0x%02X\n", ioBusPtr->addr & 0x00003F, ioBusPtr->data & 0x00FF);
-	if ((ioBusPtr->addr & 0x00003F) == 0x12) {logmsgf(LOGRTC, "RTC: Error register C is read only.\n"); return;}
+	if ((ioBusPtr->addr & 0x00003F) == 0x0C) {logmsgf(LOGRTC, "RTC: Error register C is read only.\n"); return;}
 	currrtc->_direct[ioBusPtr->addr & 0x00003F] = (ioBusPtr->data & 0x00FF);
 }
 
 void readRTCregs (struct structrtc* currrtc) {
 	ioBusPtr->data = currrtc->_direct[ioBusPtr->addr & 0x00003F];
-	if ((ioBusPtr->addr & 0x00003F) == 0x12) {logmsgf(LOGRTC, "RTC: Read register C causing clear.\n"); currrtc->regC = 0;}
+	if ((ioBusPtr->addr & 0x00003F) == 0x0C) {logmsgf(LOGRTC, "RTC: Read register C causing clear.\n"); currrtc->regC = 0;}
 	logmsgf(LOGRTC, "RTC: Read 0x%02X: 0x%02X\n", ioBusPtr->addr & 0x00003F, ioBusPtr->data & 0x00FF);
 }
 

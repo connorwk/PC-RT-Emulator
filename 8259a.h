@@ -18,6 +18,7 @@ struct struct8259 {
 	uint8_t intLines;
 	uint8_t prevIntLines;
 	uint8_t edgeLatches;
+	uint8_t freezeIRR;
 	uint8_t irr;
 	uint8_t isr;
 	uint8_t intreq;

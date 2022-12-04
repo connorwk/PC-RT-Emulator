@@ -474,6 +474,11 @@ void decode (uint32_t inst, uint8_t mode) {
 				// CLRSB
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		CLRSB SCR%d, %d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
+				if ((SCR.ICS & ICS_MASK_UnprivState) && ((r2 != 6) || (r2 != 11))) {
+					logmsgf(LOGPROC, "PROC: Error attempt to access SCR%d in unprivilaged state.\n", r2);
+					progcheck(PCS_MASK_PrivInstExcp);
+					break;
+				}
 				prevVal = SCR._direct[r2];
 				SCR._direct[r2] = SCR._direct[r2] & ~(0x00008000 >> r3);
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X & 0x%08X\n", SCR._direct[r2], prevVal, ~(0x00008000 >> r3));
@@ -482,6 +487,11 @@ void decode (uint32_t inst, uint8_t mode) {
 				// MFS
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MFS SCR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
+				if ((SCR.ICS & ICS_MASK_UnprivState) && ((r2 != 6) || (r2 != 11))) {
+					logmsgf(LOGPROC, "PROC: Error attempt to access SCR%d in unprivilaged state.\n", r2);
+					progcheck(PCS_MASK_PrivInstExcp);
+					break;
+				}
 				GPR[r3] = SCR._direct[r2];
 				logmsgf(LOGINSTR, "			0x%08X\n", GPR[r3]);
 				break;
@@ -489,6 +499,11 @@ void decode (uint32_t inst, uint8_t mode) {
 				// SETSB
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		SETSB SCR%d, %d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
+				if ((SCR.ICS & ICS_MASK_UnprivState) && ((r2 != 6) || (r2 != 11))) {
+					logmsgf(LOGPROC, "PROC: Error attempt to access SCR%d in unprivilaged state.\n", r2);
+					progcheck(PCS_MASK_PrivInstExcp);
+					break;
+				}
 				prevVal = SCR._direct[r2];
 				SCR._direct[r2] = SCR._direct[r2] | (0x00008000 >> r3);
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X | 0x%08X\n", SCR._direct[r2], prevVal, (0x00008000 >> r3));
@@ -716,6 +731,11 @@ void decode (uint32_t inst, uint8_t mode) {
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X		MTS SCR%d, GPR%d\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, r2, r3);
 				logmsgf(LOGINSTR, "			0x%08X\n", GPR[r3]);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+2; }
+				if ((SCR.ICS & ICS_MASK_UnprivState) && ((r2 != 6) || (r2 != 11))) {
+					logmsgf(LOGPROC, "PROC: Error attempt to access SCR%d in unprivilaged state.\n", r2);
+					progcheck(PCS_MASK_PrivInstExcp);
+					break;
+				}
 				if (r2 == 13) {logmsgf(LOGPROC, "PROC: Warning MTS SCR13 is unpredictable. IAR: 0x%08X\n", SCR.IAR);}
 				SCR._direct[r2] = GPR[r3];
 				break;
@@ -987,6 +1007,11 @@ void decode (uint32_t inst, uint8_t mode) {
 				// LPS
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	LPS 0x%X, %s+%d\n", SCR.IAR, inst, r2, gpr_or_0(r3), sI16);
 				logmsgf(LOGINSTR, "			0x%08X + %d\n", r3_reg_or_0,  sI16);
+				if (SCR.ICS & ICS_MASK_UnprivState) {
+					logmsgf(LOGPROC, "PROC: Error LPS instruction is a privilaged instruction.\n", r2);
+					progcheck(PCS_MASK_PrivInstExcp);
+					break;
+				}
 				if (mode == DIRECTEXEC) {
 					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;
@@ -1313,6 +1338,11 @@ void decode (uint32_t inst, uint8_t mode) {
 			case 0xF0:
 				// WAIT
 				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%04X	WAIT\n", SCR.IAR, (inst & 0xFFFF0000) >> 16, getCSname(r2), r3);
+				if (SCR.ICS & ICS_MASK_UnprivState) {
+					logmsgf(LOGPROC, "PROC: Error WAIT instruction is a privilaged instruction.\n", r2);
+					progcheck(PCS_MASK_PrivInstExcp);
+					break;
+				}
 				if (mode == DIRECTEXEC) {
 					progcheck(PCS_MASK_PCKnownOrig | PCS_MASK_IllegalOpCode);
 					return;

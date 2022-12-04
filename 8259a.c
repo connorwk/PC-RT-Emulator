@@ -14,6 +14,7 @@ struct ioBusStruct* ioBusPtr;
 
 void init8259 (struct struct8259* curr8259, struct ioBusStruct* ioBusPointer, uint32_t ioaddr, uint32_t ioaddrMask) {
 	curr8259->initreq = 4;
+	curr8259->edgeLatches = 0xFF;
 	curr8259->ioAddress = ioaddr;
 	curr8259->ioAddressMask = ioaddrMask;
 	ioBusPtr = ioBusPointer;
@@ -70,20 +71,23 @@ void write8259 (struct struct8259* curr8259) {
 		} else if ((ioBusPtr->data & 0x0018) == 0x00) {
 			// Write OCW2
 			if ((ioBusPtr->data & OCW2_CMD) == OCW2_CMD_NonSpecEOI) {
-				logmsgf(LOG8259, "8259: OCW2 NonSpecific EOI reset IRR: 0x%02X\n", ~curr8259->isr);
+				logmsgf(LOG8259, "8259: OCW2 NonSpecific EOI resets highest ISR: 0x%02X\n", curr8259->isr);
+				curr8259->freezeIRR = 0;
 				curr8259->irr = 0;
-				if (curr8259->isr == 0x01) {curr8259->isr &= ~0x01; curr8259->edgeLatches &= ~0x01;} else
-				if (curr8259->isr == 0x02) {curr8259->isr &= ~0x02; curr8259->edgeLatches &= ~0x02;} else
-				if (curr8259->isr == 0x04) {curr8259->isr &= ~0x04; curr8259->edgeLatches &= ~0x04;} else
-				if (curr8259->isr == 0x08) {curr8259->isr &= ~0x08; curr8259->edgeLatches &= ~0x08;} else
-				if (curr8259->isr == 0x10) {curr8259->isr &= ~0x10; curr8259->edgeLatches &= ~0x10;} else
-				if (curr8259->isr == 0x20) {curr8259->isr &= ~0x20; curr8259->edgeLatches &= ~0x20;} else
-				if (curr8259->isr == 0x40) {curr8259->isr &= ~0x40; curr8259->edgeLatches &= ~0x40;} else
-				if (curr8259->isr == 0x80) {curr8259->isr &= ~0x80; curr8259->edgeLatches &= ~0x80;}
+				curr8259->intreq = 0;
+				if (curr8259->isr & 0x01) {curr8259->isr &= ~0x01; return;}
+				if (curr8259->isr & 0x02) {curr8259->isr &= ~0x02; return;}
+				if (curr8259->isr & 0x04) {curr8259->isr &= ~0x04; return;}
+				if (curr8259->isr & 0x08) {curr8259->isr &= ~0x08; return;}
+				if (curr8259->isr & 0x10) {curr8259->isr &= ~0x10; return;}
+				if (curr8259->isr & 0x20) {curr8259->isr &= ~0x20; return;}
+				if (curr8259->isr & 0x40) {curr8259->isr &= ~0x40; return;}
+				if (curr8259->isr & 0x80) {curr8259->isr &= ~0x80; return;}
 			} else if ((ioBusPtr->data & OCW2_CMD) == OCW2_CMD_SpecEOI) {
-				logmsgf(LOG8259, "8259: OCW2 Specific EOI reset IRR: 0x%02X\n", ~(0x80 >> (ioBusPtr->data & OCW2_Level)));
+				logmsgf(LOG8259, "8259: OCW2 Specific EOI reset ISR: 0x%02X\n", ~(0x01 << (ioBusPtr->data & OCW2_Level)));
+				curr8259->freezeIRR = 0;
 				curr8259->irr = 0;
-				curr8259->isr &= ~(0x80 >> (ioBusPtr->data & OCW2_Level));
+				curr8259->isr &= ~(0x01 << (ioBusPtr->data & OCW2_Level));
 			} else {
 				logmsgf(LOG8259, "8259: Error not supported OCW2 0x%04X\n", ioBusPtr->data);
 			}
@@ -104,23 +108,29 @@ void read8259 (struct struct8259* curr8259) {
 		ioBusPtr->data = curr8259->ocw1;
 	} else if (curr8259->ocw3 & OCW3_PollingCmd) {
 		// Poll CMD
-		curr8259->irr = curr8259->edgeLatches & curr8259->intLines;
-		uint8_t maskedIrr = (curr8259->irr & ~curr8259->ocw1);
-		if (maskedIrr) {
-		uint8_t highestInt = 7;
-			if (maskedIrr == 0x80) {highestInt = 7; curr8259->isr |= 0x80;}
-			if (maskedIrr == 0x40) {highestInt = 6; curr8259->isr |= 0x40;}
-			if (maskedIrr == 0x20) {highestInt = 5; curr8259->isr |= 0x20;}
-			if (maskedIrr == 0x10) {highestInt = 4; curr8259->isr |= 0x10;}
-			if (maskedIrr == 0x08) {highestInt = 3; curr8259->isr |= 0x08;}
-			if (maskedIrr == 0x04) {highestInt = 2; curr8259->isr |= 0x04;}
-			if (maskedIrr == 0x02) {highestInt = 1; curr8259->isr |= 0x02;}
-			if (maskedIrr == 0x01) {highestInt = 0; curr8259->isr |= 0x01;}
+		logmsgf(LOG8259, "8259: Poll command EL:0x%02X IL:0x%02X IRR:0x%02X, M:0x%02X\n", curr8259->edgeLatches, curr8259->intLines, curr8259->irr, curr8259->ocw1);
+		if (curr8259->intreq) {
+			curr8259->freezeIRR = 1;
+			uint8_t maskedIrr = (curr8259->irr & ~curr8259->ocw1);
+			uint8_t highestInt = 7;
+			uint8_t isrToBeSet = 0;
+			if (maskedIrr & 0x80) {highestInt = 7; isrToBeSet = 0x80;}
+			if (maskedIrr & 0x40) {highestInt = 6; isrToBeSet = 0x40;}
+			if (maskedIrr & 0x20) {highestInt = 5; isrToBeSet = 0x20;}
+			if (maskedIrr & 0x10) {highestInt = 4; isrToBeSet = 0x10;}
+			if (maskedIrr & 0x08) {highestInt = 3; isrToBeSet = 0x08;}
+			if (maskedIrr & 0x04) {highestInt = 2; isrToBeSet = 0x04;}
+			if (maskedIrr & 0x02) {highestInt = 1; isrToBeSet = 0x02;}
+			if (maskedIrr & 0x01) {highestInt = 0; isrToBeSet = 0x01;}
+			curr8259->isr |= isrToBeSet;
+			curr8259->edgeLatches &= ~isrToBeSet;
 			ioBusPtr->data = 0x80 | highestInt;
+			curr8259->intreq = 0;
 		} else {
 			ioBusPtr->data = 0;
 		}
-		logmsgf(LOG8259, "8259: Poll command 0x%04X\n", ioBusPtr->data);
+		
+		logmsgf(LOG8259, "8259: Poll command returned 0x%04X\n", ioBusPtr->data);
 		curr8259->ocw3 &= ~OCW3_PollingCmd;
 	} else if ((curr8259->ocw3 & OCW3_ReadRegCmd) == 0x02) {
 		// Read IRR
@@ -153,17 +163,23 @@ void access8259 (struct struct8259* curr8259) {
 void cycle8259 (struct struct8259* curr8259) {
 	//if (!curr8259->reset) {curr8259->initreq = 4; return;}
 
-	if (curr8259->intLines & ~curr8259->prevIntLines) {
-		//curr8259->edgeLatches = (curr8259->intLines & ~curr8259->prevIntLines);
-		if (curr8259->intLines & ~curr8259->ocw1) {
-			// If any pass our mask, trigger the int pin.
-			curr8259->intreq = 1;
-			logmsgf(LOG8259, "8259: Interrupts received 0x%02X\n", curr8259->intLines);
-		}
+	// If IRR isn't frozen, set only if edgeLatch is set (ie hasn't been polled and reset to zero)
+	if (!curr8259->freezeIRR) {
+		curr8259->irr = curr8259->edgeLatches & curr8259->intLines;
 	}
+
+	// Rising edge
+	//if (curr8259->intLines & ~curr8259->prevIntLines) {
+	if (curr8259->irr & ~curr8259->ocw1) {
+		// If any pass our mask, trigger the int pin.
+		curr8259->intreq = 1;
+		//logmsgf(LOG8259, "8259: Interrupts received 0x%02X\n", curr8259->irr);
+	}
+	//}
+
 	// Edge latches only get enabled on a falling edge
 	if (~curr8259->intLines & curr8259->prevIntLines) {
-		curr8259->edgeLatches = curr8259->intLines;
+		curr8259->edgeLatches |= ~curr8259->intLines & curr8259->prevIntLines;
 	}
 	curr8259->prevIntLines = curr8259->intLines;
 }

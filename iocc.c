@@ -60,7 +60,7 @@ void iocycle (void) {
 	intCtrl1.intLines |= (kbAdapter.intReq << 5);
 	cycleRTC(&sysRTC);
 	if (sysRTC.intReq) {
-		procBusPtr->intrpt = INTRPT_1_RealTimeClock;
+		procBusPtr->intrpt |= INTRPT_1_RealTimeClock;
 	}
 	kbAdapter.PB = (sysRTC.sqwOut << 3);
 	cycle8237(&dmaCtrl1);
@@ -166,7 +166,50 @@ void ioaccessAll (void) {
 	accessMDA(&mdaVideo);
 }
 
+void setCSR(uint32_t csrbits) {
+	if (!CSRlocked) {
+		switch(csrbits) {
+			case CSR_ProtViolation:
+				if (0) {
+					// TODO: if DMA (alternate controller mode?) don't set PIODMA
+				} else {
+					if (procBusPtr->rw == RW_LOAD || (procBusPtr->rw == RW_STORE && procBusPtr->pio == PIO_TRANS)) {
+						// if read or virt write
+						procBusPtr->flags = FLAGS_Exception;
+						sysbrdcnfg.CSR = CSR_ExcepReported;
+					} else {
+						// if real write
+						procBusPtr->intrpt |= INTRPT_2_IOCCErrors;
+						sysbrdcnfg.CSR = CSR_IntPending;
+					}
+					sysbrdcnfg.CSR |= CSR_PIOError | CSR_PIODMA;
+					sysbrdcnfg.CSR |= csrbits;
+				}
+				break;
+		}
+	}
+}
+
 void ioaccess (void) {
+	if ((procBusPtr->addr & 0xFF000000) == IOChanIOMapStartAddr) {
+		ioBus.io = 1;
+		if (procBusPtr->addr > 0xF0010800) {
+			procBusPtr->flags = FLAGS_Trap;
+		}
+	} else if ((procBusPtr->addr & 0xFF000000) == IOChanMemMapStartAddr) {
+		ioBus.io = 0;
+	}
+
+	if (ioBus.io && !(sysbrdcnfg.CtrlRegCCR & CCR_IOMapPrivAcc) && procBusPtr->priv) {
+		logmsgf(LOGIO, "IO: Error IO Map access disabled in unprivilaged state.\n");
+		//setCSR(CSR_ProtViolation);
+	}
+
+	if (!ioBus.io && !(sysbrdcnfg.CtrlRegCCR & CCR_MemMapPrivAcc) && procBusPtr->priv) {
+		logmsgf(LOGIO, "IO: Error Memory Map access disabled in unprivilaged state.\n");
+		//setCSR(CSR_ProtViolation);
+	}
+
 	// Here to clean up logs... Probably not needed when done other than to simulate a delay.
 	if (procBusPtr->addr == 0xF00080E0) {logmsgf(LOGIO, "IO: Delay Reg...\n"); return;}
 
@@ -183,14 +226,6 @@ void ioaccess (void) {
 		return;
 	}
 
-	if ((procBusPtr->addr & 0xFF000000) == IOChanIOMapStartAddr) {
-		ioBus.io = 1;
-		if (procBusPtr->addr > 0xF0010800) {
-			procBusPtr->flags = FLAGS_Trap;
-		}
-	} else if ((procBusPtr->addr & 0xFF000000) == IOChanMemMapStartAddr) {
-		ioBus.io = 0;
-	}
 	ioBus.addr = procBusPtr->addr & 0x00FFFFFF;
 	ioBus.rw = procBusPtr->rw;
 	if (!ioBus.rw) {ioBus.data = 0;}

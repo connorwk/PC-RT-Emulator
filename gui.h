@@ -38,7 +38,7 @@ void render_all_text (struct Text_Texture *texturelistptr);
 void render_all_textboxes (struct Text_Texture *texturelistptr);
 void render_all_buttons (struct Text_Texture *texturelistptr);
 void setup_text_textures (void);
-void romp_pointers(uint32_t *GPRptr, union SCRs *SCRptr, uint8_t* memptr, uint8_t* mdaptr);
+void romp_pointers(uint32_t *GPRptr, union SCRs *SCRptr, uint8_t* memptr, uint8_t* mdaptr, uint8_t* dispCodeptr);
 void render_GPRs(void);
 uint32_t getBreakPoint (void);
 int getSingleStep (void);
