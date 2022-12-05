@@ -3,9 +3,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-// Time for system time borrowing, SDL for square wave/interrupt generation
-#include <time.h>
-#include <SDL.h>
+#include <sys/time.h>
 
 #include "defs.h"
 #include "rtc.h"
@@ -16,7 +14,7 @@
 struct ioBusStruct* ioBusPtr;
 
 // ms delay between square wave outputs/interrupts
-uint32_t squareWaveRate[16] = {0, 0, 0, 0, 0, 0, 1, 2, 4, 8, 16, 32, 63, 125, 250, 500};
+uint32_t squareWaveRate[16] = {0, 3906, 7812, 122, 244, 488, 976, 1953, 3906, 7812, 1562, 3125, 6250, 125000, 250000, 500000};
 
 void initRTC (struct structrtc* currrtc, struct ioBusStruct* ioBusPointer, uint32_t ioaddr, uint32_t ioaddrMask) {
 	currrtc->ioAddress = ioaddr;
@@ -52,9 +50,13 @@ void accessRTC (struct structrtc* currrtc) {
 void cycleRTC (struct structrtc* currrtc) {
 	if (currrtc->regB != 0) {
 		// RTC effectively disabled if regB is zero.
-		uint32_t msdelay = squareWaveRate[currrtc->regB & 0x0F];
-		if ((SDL_GetTicks64() - currrtc->prevticks) >= msdelay) {
-			currrtc->prevticks = SDL_GetTicks64();
+		struct timeval time;
+		gettimeofday(&time, NULL);
+		// Needs to be much faster if running without logging...
+		//uint32_t usdelay = squareWaveRate[currrtc->regB & 0x0F] / 20;
+		uint32_t usdelay = squareWaveRate[currrtc->regB & 0x0F];
+		if ((((time.tv_sec * 1000000) + time.tv_usec) - currrtc->prevus) >= usdelay) {
+			currrtc->prevus = (time.tv_sec * 1000000) + time.tv_usec;
 			// Fire
 			if (currrtc->regB & REGB_SquareWaveEn) {
 				currrtc->sqwOut ^= 0x01;

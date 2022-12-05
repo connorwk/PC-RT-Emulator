@@ -27,7 +27,7 @@ struct structrtc {
 			uint8_t rtcMem[50];
 		};
 	};
-	uint64_t prevticks;
+	uint64_t prevus;
 	uint8_t sqwOut;
 	uint8_t intReq;
 };

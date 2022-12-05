@@ -14,6 +14,7 @@ struct procBusStruct* procBusPtr;
 
 uint32_t wait;
 uint32_t currentIntLevel;
+uint32_t prevICS;
 
 uint32_t instCounter[256];
 
@@ -213,6 +214,10 @@ uint32_t fetch (void) {
 	checkInterrupt();
 	inst = procBusCycle(SCR.IAR, 0, WIDTH_INST, RW_LOAD, 0);
 	decode(inst, NORMEXEC);
+	if (SCR.ICS != prevICS) {
+		prevICS = SCR.ICS;
+		logmsgf(LOGPROC, "PROC: ICS changed: 0x%08X\n", SCR.ICS);
+	}
 	return 0;
 }
 
@@ -795,8 +800,8 @@ void decode (uint32_t inst, uint8_t mode) {
 				} else {
 					GPR[r2^0x01] = GPR[r2] << (GPR[r3] & 0x0000003F);
 				}
-				//lt_eq_gt_flag_check(GPR[r2^0x01]);
-				algebretic_cmp(GPR[r2^0x01], GPR[r2]);
+				lt_eq_gt_flag_check(GPR[r2^0x01]);
+				//algebretic_cmp(GPR[r2^0x01], GPR[r2]);
 				logmsgf(LOGINSTR, "			0x%08X = 0x%08X << %d\n", GPR[r2^0x01], GPR[r2], (GPR[r3] & 0x0000003F));
 				logmsgf(LOGINSTR, "			Flags: LT:%d EQ:%d GT:%d\n", (SCR.CS & CS_MASK_LT) >> 6, (SCR.CS & CS_MASK_EQ) >> 5, (SCR.CS & CS_MASK_GT) >> 4);
 				break;
@@ -1050,9 +1055,9 @@ void decode (uint32_t inst, uint8_t mode) {
 				break;
 			case 0xD2:
 				// SFI
-				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	AEI GPR%d, GPR%d+%d\n", SCR.IAR, inst, r2, r3, sI16);
+				logmsgf(LOGINSTR, "INSTR: 0x%08X: 0x%08X	AFI GPR%d, GPR%d+%d\n", SCR.IAR, inst, r2, r3, sI16);
 				if (mode == NORMEXEC) { SCR.IAR = SCR.IAR+4; }
-				arith_result = (int32_t)GPR[r3] - (int32_t)sI16;
+				arith_result = (int32_t)sI16 - (int32_t)GPR[r3];
 				GPR[r2] = arith_result & 0x00000000FFFFFFFF;
 				c0_flag_check(arith_result);
 				ov_flag_check(arith_result);

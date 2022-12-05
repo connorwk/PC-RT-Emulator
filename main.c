@@ -42,7 +42,7 @@ int main (void) {
 
 	while(!close) {
 		// Enable logging after certain address to save log file size... 0x008021B2: Before SysBoard IO regs tests 0x00806724: Before KBADPT init.
-		if (SCRptr->IAR == 0x00806724) {
+		if (SCRptr->IAR == 0x008021B2) {
 			enlogtypes(LOGALL);
 		}
 		if ((SDL_GetTicks64() - ticks) >= 16) {

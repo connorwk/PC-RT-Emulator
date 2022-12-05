@@ -130,7 +130,7 @@ void read8259 (struct struct8259* curr8259) {
 			curr8259->isr |= isrToBeSet;
 			curr8259->edgeLatches &= ~isrToBeSet;
 			ioBusPtr->data = 0x80 | highestInt;
-			curr8259->intreq = 0;
+			//curr8259->intreq = 0;
 		} else {
 			ioBusPtr->data = 0;
 		}
